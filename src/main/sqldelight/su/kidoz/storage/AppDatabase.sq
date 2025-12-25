@@ -1,0 +1,136 @@
+-- Connection configurations
+CREATE TABLE IF NOT EXISTS connections (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    host TEXT NOT NULL DEFAULT '',
+    port INTEGER NOT NULL DEFAULT 0,
+    database_name TEXT NOT NULL DEFAULT '',
+    username TEXT NOT NULL DEFAULT '',
+    password TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    properties TEXT NOT NULL DEFAULT '{}',
+    color TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- Query history
+CREATE TABLE IF NOT EXISTS query_history (
+    id TEXT PRIMARY KEY NOT NULL,
+    connection_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    executed_at INTEGER NOT NULL,
+    execution_time_ms INTEGER NOT NULL DEFAULT 0,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    successful INTEGER NOT NULL DEFAULT 1,
+    error_message TEXT,
+    database_name TEXT,
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id);
+CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at DESC);
+
+-- Application settings
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+
+-- Saved queries (favorites)
+CREATE TABLE IF NOT EXISTS saved_queries (
+    id TEXT PRIMARY KEY NOT NULL,
+    connection_id TEXT,
+    name TEXT NOT NULL,
+    query TEXT NOT NULL,
+    description TEXT,
+    folder TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id);
+
+-- Connection operations
+getAllConnections:
+SELECT * FROM connections ORDER BY name;
+
+getConnectionById:
+SELECT * FROM connections WHERE id = ?;
+
+insertConnection:
+INSERT OR REPLACE INTO connections(id, name, type, host, port, database_name, username, password, path, properties, color, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateConnection:
+UPDATE connections SET
+    name = ?,
+    type = ?,
+    host = ?,
+    port = ?,
+    database_name = ?,
+    username = ?,
+    password = ?,
+    path = ?,
+    properties = ?,
+    color = ?,
+    updated_at = ?
+WHERE id = ?;
+
+deleteConnection:
+DELETE FROM connections WHERE id = ?;
+
+-- Query history operations
+getQueryHistory:
+SELECT * FROM query_history WHERE connection_id = ? ORDER BY executed_at DESC LIMIT ?;
+
+getAllQueryHistory:
+SELECT * FROM query_history ORDER BY executed_at DESC LIMIT ?;
+
+searchQueryHistory:
+SELECT * FROM query_history WHERE query LIKE ? ORDER BY executed_at DESC LIMIT ?;
+
+insertQueryHistory:
+INSERT INTO query_history(id, connection_id, query, executed_at, execution_time_ms, row_count, successful, error_message, database_name)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteQueryHistory:
+DELETE FROM query_history WHERE id = ?;
+
+clearQueryHistoryForConnection:
+DELETE FROM query_history WHERE connection_id = ?;
+
+clearAllQueryHistory:
+DELETE FROM query_history;
+
+-- Settings operations
+getSetting:
+SELECT value FROM settings WHERE key = ?;
+
+setSetting:
+INSERT OR REPLACE INTO settings(key, value) VALUES (?, ?);
+
+deleteSetting:
+DELETE FROM settings WHERE key = ?;
+
+getAllSettings:
+SELECT * FROM settings;
+
+-- Saved queries operations
+getAllSavedQueries:
+SELECT * FROM saved_queries ORDER BY folder, name;
+
+getSavedQueriesForConnection:
+SELECT * FROM saved_queries WHERE connection_id = ? OR connection_id IS NULL ORDER BY folder, name;
+
+getSavedQueryById:
+SELECT * FROM saved_queries WHERE id = ?;
+
+insertSavedQuery:
+INSERT OR REPLACE INTO saved_queries(id, connection_id, name, query, description, folder, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteSavedQuery:
+DELETE FROM saved_queries WHERE id = ?;
