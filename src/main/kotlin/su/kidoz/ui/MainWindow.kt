@@ -21,8 +21,10 @@ import su.kidoz.feature.editor.EditorViewModel
 import su.kidoz.feature.editor.ui.EditorTabs
 import su.kidoz.feature.editor.ui.SqlEditor
 import su.kidoz.feature.explorer.ExplorerEffect
+import su.kidoz.feature.explorer.ExplorerEvent
 import su.kidoz.feature.explorer.ExplorerViewModel
 import su.kidoz.feature.explorer.ui.DatabaseTree
+import su.kidoz.feature.explorer.ui.ElasticsearchIndexDialog
 import su.kidoz.feature.history.HistoryEffect
 import su.kidoz.feature.history.HistoryViewModel
 import su.kidoz.feature.history.ui.HistoryPanel
@@ -108,6 +110,15 @@ fun MainWindow() {
                     }
                     is ExplorerEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
+                    }
+                    is ExplorerEffect.IndexCreated -> {
+                        snackbarHostState.showSnackbar("Index '${effect.indexName}' created successfully")
+                    }
+                    is ExplorerEffect.IndexDeleted -> {
+                        snackbarHostState.showSnackbar("Index '${effect.indexName}' deleted")
+                    }
+                    is ExplorerEffect.IndexUpdated -> {
+                        snackbarHostState.showSnackbar("Index '${effect.indexName}' updated")
                     }
                 }
             }.launchIn(this)
@@ -297,6 +308,39 @@ fun MainWindow() {
         ConnectionDialog(
             state = dialogState,
             onEvent = connectionViewModel::onEvent,
+        )
+    }
+
+    // Elasticsearch Index dialog
+    explorerState.indexDialogState?.let { dialogState ->
+        ElasticsearchIndexDialog(
+            state = dialogState,
+            onEvent = explorerViewModel::onEvent,
+        )
+    }
+
+    // Delete confirmation dialog
+    explorerState.deleteConfirmation?.let { confirmation ->
+        AlertDialog(
+            onDismissRequest = { explorerViewModel.onEvent(ExplorerEvent.CancelDelete) },
+            title = { Text("Confirm Delete") },
+            text = { Text(confirmation.message) },
+            confirmButton = {
+                Button(
+                    onClick = { explorerViewModel.onEvent(ExplorerEvent.DeleteIndex(confirmation.indexName)) },
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { explorerViewModel.onEvent(ExplorerEvent.CancelDelete) }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }

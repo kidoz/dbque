@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch.cat.IndicesResponse
 import co.elastic.clients.elasticsearch.indices.GetMappingResponse
 import co.elastic.clients.json.jackson.JacksonJsonpMapper
 import co.elastic.clients.transport.rest_client.RestClientTransport
+import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KotlinLogging
@@ -13,10 +14,12 @@ import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.impl.client.BasicCredentialsProvider
+import org.elasticsearch.client.Request
 import org.elasticsearch.client.RestClient
 import su.kidoz.core.model.*
 import su.kidoz.database.ElasticsearchDatabaseConnection
 import su.kidoz.database.capabilities.*
+import java.io.StringReader
 import java.sql.Connection
 
 /**
@@ -25,6 +28,7 @@ import java.sql.Connection
  * Elasticsearch is a distributed search and analytics engine.
  * This driver uses the official Elasticsearch Java client.
  */
+@Suppress("LargeClass") // Driver classes consolidate all database operations
 class ElasticsearchDriver : DatabaseDriver {
     private val logger = KotlinLogging.logger {}
 
@@ -648,6 +652,289 @@ class ElasticsearchDriver : DatabaseDriver {
             } catch (e: Exception) {
                 logger.error(e) { "Failed to get index mapping for $indexName" }
                 generateCreateTableDdl(connection as Connection, indexName, null, null)
+            }
+        }
+
+    // ==================== Index Management ====================
+
+    private val objectMapper = ObjectMapper()
+
+    /**
+     * Create a new index with the given settings and mappings JSON.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index to create
+     * @param definitionJson JSON containing settings and mappings for the index
+     * @return Result indicating success or failure
+     */
+    suspend fun createIndex(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+        definitionJson: String,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                logger.info { "Creating Elasticsearch index: $indexName" }
+
+                connection.client.indices().create { builder ->
+                    builder.index(indexName)
+                    builder.withJson(StringReader(definitionJson))
+                }
+
+                logger.info { "Successfully created index: $indexName" }
+            }
+        }
+
+    /**
+     * Delete an existing index.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index to delete
+     * @return Result indicating success or failure
+     */
+    suspend fun deleteIndex(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                logger.info { "Deleting Elasticsearch index: $indexName" }
+
+                connection.client.indices().delete { it.index(indexName) }
+
+                logger.info { "Successfully deleted index: $indexName" }
+            }
+        }
+
+    /**
+     * Get the full definition of an index including settings and mappings as JSON.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @return Result containing the JSON definition or error
+     */
+    suspend fun getIndexDefinition(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+    ): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                logger.debug { "Getting index definition for: $indexName" }
+
+                // Use low-level REST client to get the full index definition
+                val request = Request("GET", "/$indexName")
+                val response = connection.lowLevelClient.performRequest(request)
+                val responseBody =
+                    response.entity.content
+                        .bufferedReader()
+                        .readText()
+
+                // Parse and extract just this index's definition, then pretty print
+                val rootNode = objectMapper.readTree(responseBody)
+                val indexNode = rootNode.path(indexName)
+
+                if (!indexNode.isMissingNode) {
+                    // Build clean definition with just settings and mappings
+                    val result = objectMapper.createObjectNode()
+
+                    val indexSettings = indexNode.path("settings").path("index")
+                    if (!indexSettings.isMissingNode) {
+                        val cleanSettings = objectMapper.createObjectNode()
+
+                        // Copy relevant settings (exclude system-generated ones)
+                        val relevantSettings =
+                            listOf(
+                                "number_of_shards",
+                                "number_of_replicas",
+                                "refresh_interval",
+                                "max_result_window",
+                                "analysis",
+                            )
+                        relevantSettings.forEach { key ->
+                            val value = indexSettings.path(key)
+                            if (!value.isMissingNode) {
+                                cleanSettings.set<com.fasterxml.jackson.databind.JsonNode>(key, value)
+                            }
+                        }
+
+                        if (cleanSettings.size() > 0) {
+                            result.set<com.fasterxml.jackson.databind.JsonNode>("settings", cleanSettings)
+                        }
+                    }
+
+                    val mappings = indexNode.path("mappings")
+                    if (!mappings.isMissingNode) {
+                        result.set<com.fasterxml.jackson.databind.JsonNode>("mappings", mappings)
+                    }
+
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result)
+                } else {
+                    throw IllegalStateException("Index $indexName not found in response")
+                }
+            }
+        }
+
+    /**
+     * Get the settings of an index as JSON (for editing).
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @return Result containing the settings JSON or error
+     */
+    suspend fun getIndexSettings(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+    ): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request("GET", "/$indexName/_settings")
+                val response = connection.lowLevelClient.performRequest(request)
+                val responseBody =
+                    response.entity.content
+                        .bufferedReader()
+                        .readText()
+
+                val rootNode = objectMapper.readTree(responseBody)
+                val indexSettings = rootNode.path(indexName).path("settings").path("index")
+
+                if (!indexSettings.isMissingNode) {
+                    val cleanSettings = objectMapper.createObjectNode()
+
+                    // Only include editable (dynamic) settings
+                    val dynamicSettings =
+                        listOf(
+                            "number_of_replicas",
+                            "refresh_interval",
+                            "max_result_window",
+                            "max_inner_result_window",
+                            "max_rescore_window",
+                            "max_docvalue_fields_search",
+                            "max_script_fields",
+                            "max_terms_count",
+                            "max_regex_length",
+                            "routing",
+                        )
+                    dynamicSettings.forEach { key ->
+                        val value = indexSettings.path(key)
+                        if (!value.isMissingNode) {
+                            cleanSettings.set<com.fasterxml.jackson.databind.JsonNode>(key, value)
+                        }
+                    }
+
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(cleanSettings)
+                } else {
+                    "{}"
+                }
+            }
+        }
+
+    /**
+     * Update dynamic settings for an index.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @param settingsJson JSON containing the settings to update
+     * @return Result indicating success or failure
+     */
+    suspend fun updateIndexSettings(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+        settingsJson: String,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                logger.info { "Updating settings for index: $indexName" }
+
+                connection.client.indices().putSettings { builder ->
+                    builder.index(indexName)
+                    builder.withJson(StringReader(settingsJson))
+                }
+
+                logger.info { "Successfully updated settings for index: $indexName" }
+            }
+        }
+
+    /**
+     * Get the mappings of an index as JSON (for editing).
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @return Result containing the mappings JSON or error
+     */
+    suspend fun getIndexMappings(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+    ): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val mapping = connection.client.indices().getMapping { it.index(indexName) }
+                val indexMapping = mapping.result()[indexName]?.mappings()
+
+                if (indexMapping != null) {
+                    val mappingsNode = objectMapper.createObjectNode()
+                    val propertiesNode = objectMapper.createObjectNode()
+
+                    indexMapping.properties()?.forEach { (fieldName, property) ->
+                        val fieldNode = objectMapper.createObjectNode()
+                        fieldNode.put("type", property._kind().jsonValue())
+                        propertiesNode.set<com.fasterxml.jackson.databind.JsonNode>(fieldName, fieldNode)
+                    }
+
+                    mappingsNode.set<com.fasterxml.jackson.databind.JsonNode>("properties", propertiesNode)
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(mappingsNode)
+                } else {
+                    """{"properties": {}}"""
+                }
+            }
+        }
+
+    /**
+     * Update mappings for an index (add new fields).
+     * Note: Existing field types cannot be changed in Elasticsearch.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @param mappingsJson JSON containing the mappings to add/update
+     * @return Result indicating success or failure
+     */
+    suspend fun updateIndexMappings(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+        mappingsJson: String,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                logger.info { "Updating mappings for index: $indexName" }
+
+                connection.client.indices().putMapping { builder ->
+                    builder.index(indexName)
+                    builder.withJson(StringReader(mappingsJson))
+                }
+
+                logger.info { "Successfully updated mappings for index: $indexName" }
+            }
+        }
+
+    /**
+     * Check if an index exists.
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @return true if the index exists
+     */
+    suspend fun indexExists(
+        connection: ElasticsearchDatabaseConnection,
+        indexName: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                connection.client
+                    .indices()
+                    .exists { it.index(indexName) }
+                    .value()
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to check if index exists: $indexName" }
+                false
             }
         }
 }

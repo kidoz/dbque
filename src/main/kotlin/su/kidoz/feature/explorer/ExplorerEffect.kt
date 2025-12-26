@@ -14,4 +14,17 @@ sealed interface ExplorerEffect : UiEffect {
     data class ShowError(
         val message: String,
     ) : ExplorerEffect
+
+    // Elasticsearch index management effects
+    data class IndexCreated(
+        val indexName: String,
+    ) : ExplorerEffect
+
+    data class IndexDeleted(
+        val indexName: String,
+    ) : ExplorerEffect
+
+    data class IndexUpdated(
+        val indexName: String,
+    ) : ExplorerEffect
 }

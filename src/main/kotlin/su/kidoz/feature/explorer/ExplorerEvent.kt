@@ -41,4 +41,37 @@ sealed interface ExplorerEvent : UiEvent {
         val tableName: String,
         val schema: String?,
     ) : ExplorerEvent
+
+    // Elasticsearch index management
+    data object ShowCreateIndexDialog : ExplorerEvent
+
+    data class ShowEditIndexSettingsDialog(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data class ShowEditIndexMappingsDialog(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data object HideIndexDialog : ExplorerEvent
+
+    data class UpdateIndexName(
+        val name: String,
+    ) : ExplorerEvent
+
+    data class UpdateIndexDefinition(
+        val json: String,
+    ) : ExplorerEvent
+
+    data object SaveIndex : ExplorerEvent
+
+    data class ConfirmDeleteIndex(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data class DeleteIndex(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data object CancelDelete : ExplorerEvent
 }

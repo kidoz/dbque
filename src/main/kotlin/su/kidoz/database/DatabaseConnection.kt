@@ -78,10 +78,10 @@ class MongoDatabaseConnection(
 class ElasticsearchDatabaseConnection(
     override val config: ConnectionConfig,
     val client: ElasticsearchClient,
-    private val restClient: RestClient,
+    val lowLevelClient: RestClient,
 ) : DatabaseConnection {
     override fun close() {
-        restClient.close()
+        lowLevelClient.close()
     }
 
     override val isValid: Boolean

@@ -5,6 +5,7 @@ import su.kidoz.mvi.UiState
 
 data class ExplorerState(
     val connectionId: String? = null,
+    val databaseType: DatabaseType? = null,
     val databases: List<DatabaseInfo> = emptyList(),
     val schemas: List<SchemaInfo> = emptyList(),
     val tables: List<TableInfo> = emptyList(),
@@ -14,7 +15,13 @@ data class ExplorerState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val tableDetails: TableDetails? = null,
-) : UiState
+    val indexDialogState: ElasticsearchIndexDialogState? = null,
+    val deleteConfirmation: DeleteConfirmationState? = null,
+) : UiState {
+    /** Get the terminology for the current database type */
+    val terminology: DatabaseTerminology?
+        get() = databaseType?.terminology()
+}
 
 data class TableDetails(
     val table: TableInfo,
@@ -75,4 +82,73 @@ enum class TreeNodeType {
     VIEW,
     COLUMN,
     INDEX,
+}
+
+// ==================== Elasticsearch Index Dialog ====================
+
+/**
+ * Mode for the Elasticsearch index dialog.
+ */
+enum class IndexDialogMode {
+    CREATE,
+    EDIT_SETTINGS,
+    EDIT_MAPPINGS,
+}
+
+/**
+ * State for the Elasticsearch index create/edit dialog.
+ */
+data class ElasticsearchIndexDialogState(
+    val mode: IndexDialogMode = IndexDialogMode.CREATE,
+    val indexName: String = "",
+    val definitionJson: String = DEFAULT_INDEX_TEMPLATE,
+    val isProcessing: Boolean = false,
+    val error: String? = null,
+) {
+    val isValid: Boolean
+        get() =
+            indexName.isNotBlank() &&
+                indexName.matches(INDEX_NAME_PATTERN) &&
+                definitionJson.isNotBlank()
+
+    val title: String
+        get() =
+            when (mode) {
+                IndexDialogMode.CREATE -> "Create Index"
+                IndexDialogMode.EDIT_SETTINGS -> "Edit Index Settings"
+                IndexDialogMode.EDIT_MAPPINGS -> "Edit Index Mappings"
+            }
+
+    companion object {
+        private val INDEX_NAME_PATTERN = Regex("[a-z0-9][a-z0-9_.-]*")
+
+        val DEFAULT_INDEX_TEMPLATE =
+            """
+            {
+              "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,
+                "analysis": {
+                  "analyzer": {},
+                  "tokenizer": {}
+                }
+              },
+              "mappings": {
+                "properties": {
+                  "field_name": { "type": "text" }
+                }
+              }
+            }
+            """.trimIndent()
+    }
+}
+
+/**
+ * State for delete confirmation dialog.
+ */
+data class DeleteConfirmationState(
+    val indexName: String,
+) {
+    val message: String
+        get() = "Are you sure you want to delete index '$indexName'? This action cannot be undone."
 }

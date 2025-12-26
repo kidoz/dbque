@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import su.kidoz.core.model.DatabaseCategory
+import su.kidoz.core.model.DatabaseTerminology
 import su.kidoz.feature.explorer.*
 import su.kidoz.ui.theme.DBQueTheme
 
@@ -92,10 +94,11 @@ fun DatabaseTree(
                 )
             }
         } else {
+            val terminology = state.terminology
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Tables folder
+                // Tables/Collections/Indices folder
                 item {
                     TreeNodeItem(
                         node = TreeNode.TablesFolder(null, null),
@@ -105,6 +108,7 @@ fun DatabaseTree(
                         onToggle = { onEvent(ExplorerEvent.ToggleNode("tables::")) },
                         onSelect = {},
                         onEvent = onEvent,
+                        terminology = terminology,
                     )
                 }
 
@@ -118,9 +122,10 @@ fun DatabaseTree(
                             onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
                             onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
                             onEvent = onEvent,
+                            terminology = terminology,
                         )
 
-                        // Show columns when table is expanded
+                        // Show columns/fields when table is expanded
                         if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
                             val details = state.tableDetails?.takeIf { it.table.name == table.name }
                             details?.columns?.forEach { column ->
@@ -132,14 +137,15 @@ fun DatabaseTree(
                                     onToggle = {},
                                     onSelect = {},
                                     onEvent = onEvent,
+                                    terminology = terminology,
                                 )
                             }
                         }
                     }
                 }
 
-                // Views folder
-                if (state.views.isNotEmpty()) {
+                // Views folder (only for databases that support views)
+                if (state.views.isNotEmpty() && terminology?.supportsViews != false) {
                     item {
                         TreeNodeItem(
                             node = TreeNode.ViewsFolder(null, null),
@@ -149,6 +155,7 @@ fun DatabaseTree(
                             onToggle = { onEvent(ExplorerEvent.ToggleNode("views::")) },
                             onSelect = {},
                             onEvent = onEvent,
+                            terminology = terminology,
                         )
                     }
 
@@ -162,6 +169,7 @@ fun DatabaseTree(
                                 onToggle = {},
                                 onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(view))) },
                                 onEvent = onEvent,
+                                terminology = terminology,
                             )
                         }
                     }
@@ -180,10 +188,11 @@ private fun TreeNodeItem(
     onToggle: () -> Unit,
     onSelect: () -> Unit,
     onEvent: (ExplorerEvent) -> Unit,
+    terminology: DatabaseTerminology? = null,
 ) {
     val contextMenuItems =
-        remember(node) {
-            buildContextMenuItems(node, onEvent)
+        remember(node, terminology) {
+            buildContextMenuItems(node, onEvent, terminology)
         }
 
     ContextMenuArea(items = { contextMenuItems }) {
@@ -218,7 +227,7 @@ private fun TreeNodeItem(
 
             // Node icon
             Icon(
-                imageVector = getNodeIcon(node),
+                imageVector = getNodeIcon(node, terminology),
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = getNodeColor(node),
@@ -226,7 +235,7 @@ private fun TreeNodeItem(
 
             // Node name
             Text(
-                text = getNodeDisplayText(node),
+                text = getNodeDisplayText(node, terminology),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -254,13 +263,26 @@ private fun canExpand(node: TreeNode): Boolean =
         else -> false
     }
 
-private fun getNodeIcon(node: TreeNode): ImageVector =
+private fun getNodeIcon(
+    node: TreeNode,
+    terminology: DatabaseTerminology?,
+): ImageVector =
     when (node) {
         is TreeNode.DatabaseNode -> Icons.Default.Storage
         is TreeNode.SchemaNode -> Icons.Default.Schema
-        is TreeNode.TablesFolder -> Icons.Default.TableChart
+        is TreeNode.TablesFolder ->
+            when (terminology?.category) {
+                DatabaseCategory.DOCUMENT -> Icons.Default.Folder
+                DatabaseCategory.SEARCH_ENGINE -> Icons.Default.Search
+                else -> Icons.Default.TableChart
+            }
         is TreeNode.ViewsFolder -> Icons.AutoMirrored.Filled.ViewList
-        is TreeNode.TableNode -> Icons.Default.TableRows
+        is TreeNode.TableNode ->
+            when (terminology?.category) {
+                DatabaseCategory.DOCUMENT -> Icons.Default.Description
+                DatabaseCategory.SEARCH_ENGINE -> Icons.Default.Inventory
+                else -> Icons.Default.TableRows
+            }
         is TreeNode.ViewNode -> Icons.Default.RemoveRedEye
         is TreeNode.ColumnNode -> Icons.Default.ViewColumn
         is TreeNode.IndexNode -> Icons.AutoMirrored.Filled.Sort
@@ -277,8 +299,12 @@ private fun getNodeColor(node: TreeNode): androidx.compose.ui.graphics.Color =
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-private fun getNodeDisplayText(node: TreeNode): String =
+private fun getNodeDisplayText(
+    node: TreeNode,
+    terminology: DatabaseTerminology?,
+): String =
     when (node) {
+        is TreeNode.TablesFolder -> terminology?.tableLabel ?: "Tables"
         is TreeNode.ColumnNode -> {
             val pk = if (node.column.autoIncrement) " PK" else ""
             val nullable = if (node.column.nullable) "" else " NOT NULL"
@@ -296,31 +322,61 @@ private fun getNodeSuffix(node: TreeNode): String? =
 private fun buildContextMenuItems(
     node: TreeNode,
     onEvent: (ExplorerEvent) -> Unit,
+    terminology: DatabaseTerminology?,
 ): List<ContextMenuItem> =
     buildList {
         add(ContextMenuItem("Copy Name") { onEvent(ExplorerEvent.CopyName(node.name)) })
 
         when (node) {
+            is TreeNode.TablesFolder -> {
+                // Add "Create Index..." for Elasticsearch
+                if (terminology?.category == DatabaseCategory.SEARCH_ENGINE) {
+                    add(
+                        ContextMenuItem("Create Index...") {
+                            onEvent(ExplorerEvent.ShowCreateIndexDialog)
+                        },
+                    )
+                }
+            }
             is TreeNode.TableNode -> {
                 add(
-                    ContextMenuItem("SELECT * FROM...") {
+                    ContextMenuItem(terminology?.selectAction ?: "SELECT * FROM...") {
                         onEvent(ExplorerEvent.GenerateSelect(node.table.name, node.table.schema))
                     },
                 )
                 add(
-                    ContextMenuItem("INSERT INTO...") {
+                    ContextMenuItem(terminology?.insertAction ?: "INSERT INTO...") {
                         onEvent(ExplorerEvent.GenerateInsert(node.table.name, node.table.schema))
                     },
                 )
                 add(
-                    ContextMenuItem("Generate DDL") {
+                    ContextMenuItem(terminology?.ddlAction ?: "Generate DDL") {
                         onEvent(ExplorerEvent.GenerateDdl(node.table.name, node.table.schema))
                     },
                 )
+
+                // Add Elasticsearch-specific index management options
+                if (terminology?.category == DatabaseCategory.SEARCH_ENGINE) {
+                    add(
+                        ContextMenuItem("Edit Settings...") {
+                            onEvent(ExplorerEvent.ShowEditIndexSettingsDialog(node.table.name))
+                        },
+                    )
+                    add(
+                        ContextMenuItem("Edit Mappings...") {
+                            onEvent(ExplorerEvent.ShowEditIndexMappingsDialog(node.table.name))
+                        },
+                    )
+                    add(
+                        ContextMenuItem("Delete Index") {
+                            onEvent(ExplorerEvent.ConfirmDeleteIndex(node.table.name))
+                        },
+                    )
+                }
             }
             is TreeNode.ViewNode -> {
                 add(
-                    ContextMenuItem("SELECT * FROM...") {
+                    ContextMenuItem(terminology?.selectAction ?: "SELECT * FROM...") {
                         onEvent(ExplorerEvent.GenerateSelect(node.view.name, node.view.schema))
                     },
                 )
