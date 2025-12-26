@@ -17,6 +17,7 @@ repositories {
     mavenCentral()
     google()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://jitpack.io")
 }
 
 dependencies {
@@ -66,6 +67,9 @@ dependencies {
 
     // Connection Pool
     implementation("com.zaxxer:HikariCP:5.1.0")
+
+    // Parser Combinator Library
+    implementation("com.github.h0tk3y.betterParse:better-parse:0.4.4")
 
     // Testing
     testImplementation(kotlin("test"))

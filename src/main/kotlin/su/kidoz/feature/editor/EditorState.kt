@@ -41,6 +41,29 @@ data class EditorTab(
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
 
+    /** Split result containing all queries and the current query at cursor */
+    val splitResult: SplitResult
+        get() = QuerySplitter.split(content, cursorPosition)
+
+    /** The query at the current cursor position */
+    val currentQuery: QueryRange?
+        get() = splitResult.currentQuery?.takeIf { !it.isEmpty }
+
+    /** All non-empty queries in this tab */
+    val allQueries: List<QueryRange>
+        get() = splitResult.nonEmptyQueries
+
+    /** Number of non-empty queries in this tab */
+    val queryCount: Int
+        get() = splitResult.queryCount
+
+    /** Index of the current query (1-based for display) */
+    val currentQueryNumber: Int
+        get() {
+            val current = currentQuery ?: return 0
+            return allQueries.indexOfFirst { it.start == current.start } + 1
+        }
+
     companion object {
         const val MAX_UNDO_STACK_SIZE = 100
     }

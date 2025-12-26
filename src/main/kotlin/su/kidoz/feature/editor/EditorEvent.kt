@@ -42,6 +42,12 @@ sealed interface EditorEvent : UiEvent {
 
     data object ExecuteSelectedQuery : EditorEvent
 
+    /** Execute only the query where the cursor is currently positioned */
+    data object ExecuteCurrentQuery : EditorEvent
+
+    /** Execute all queries in the tab sequentially */
+    data object ExecuteAllQueries : EditorEvent
+
     data object CancelExecution : EditorEvent
 
     // Actions
