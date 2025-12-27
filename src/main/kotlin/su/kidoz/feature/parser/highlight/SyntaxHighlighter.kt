@@ -492,7 +492,8 @@ class SqlHighlighter(
 // ============================================================================
 
 class MongoHighlighter : QueryHighlighter {
-    private val mongoOperators =
+    // Query and Comparison Operators
+    private val queryOperators =
         setOf(
             "\$eq",
             "\$ne",
@@ -509,16 +510,67 @@ class MongoHighlighter : QueryHighlighter {
             "\$exists",
             "\$type",
             "\$regex",
-            "\$size",
-            "\$all",
-            "\$elemMatch",
+            "\$options",
             "\$mod",
             "\$text",
+            "\$search",
             "\$where",
+            "\$expr",
+            "\$jsonSchema",
+            "\$comment",
+        )
+
+    // Array Query Operators
+    private val arrayOperators =
+        setOf(
+            "\$all",
+            "\$elemMatch",
+            "\$size",
+        )
+
+    // Geospatial Operators
+    private val geoOperators =
+        setOf(
             "\$geoWithin",
             "\$geoIntersects",
             "\$near",
             "\$nearSphere",
+            "\$box",
+            "\$center",
+            "\$centerSphere",
+            "\$geometry",
+            "\$maxDistance",
+            "\$minDistance",
+            "\$polygon",
+        )
+
+    // Update Operators
+    private val updateOperators =
+        setOf(
+            "\$set",
+            "\$unset",
+            "\$inc",
+            "\$mul",
+            "\$rename",
+            "\$setOnInsert",
+            "\$min",
+            "\$max",
+            "\$currentDate",
+            "\$addToSet",
+            "\$pop",
+            "\$pull",
+            "\$push",
+            "\$pullAll",
+            "\$each",
+            "\$position",
+            "\$slice",
+            "\$sort",
+            "\$bit",
+        )
+
+    // Aggregation Pipeline Stages
+    private val pipelineStages =
+        setOf(
             "\$match",
             "\$project",
             "\$group",
@@ -534,12 +586,30 @@ class MongoHighlighter : QueryHighlighter {
             "\$bucket",
             "\$bucketAuto",
             "\$addFields",
-            "\$set",
-            "\$unset",
             "\$replaceRoot",
             "\$replaceWith",
             "\$merge",
             "\$out",
+            "\$redact",
+            "\$sortByCount",
+            "\$unionWith",
+            "\$densify",
+            "\$fill",
+            "\$setWindowFields",
+            "\$documents",
+            "\$changeStream",
+            "\$listSessions",
+            "\$listLocalSessions",
+            "\$currentOp",
+            "\$collStats",
+            "\$indexStats",
+            "\$planCacheStats",
+            "\$geoNear",
+        )
+
+    // Aggregation Accumulators
+    private val accumulators =
+        setOf(
             "\$sum",
             "\$avg",
             "\$min",
@@ -550,30 +620,197 @@ class MongoHighlighter : QueryHighlighter {
             "\$addToSet",
             "\$stdDevPop",
             "\$stdDevSamp",
+            "\$mergeObjects",
+            "\$accumulator",
+            "\$bottom",
+            "\$bottomN",
+            "\$top",
+            "\$topN",
+            "\$firstN",
+            "\$lastN",
+            "\$maxN",
+            "\$minN",
+            "\$median",
+            "\$percentile",
         )
+
+    // Aggregation Expressions
+    private val expressions =
+        setOf(
+            "\$abs",
+            "\$add",
+            "\$ceil",
+            "\$divide",
+            "\$exp",
+            "\$floor",
+            "\$ln",
+            "\$log",
+            "\$log10",
+            "\$mod",
+            "\$multiply",
+            "\$pow",
+            "\$round",
+            "\$sqrt",
+            "\$subtract",
+            "\$trunc",
+            "\$concat",
+            "\$indexOfBytes",
+            "\$indexOfCP",
+            "\$ltrim",
+            "\$rtrim",
+            "\$regexFind",
+            "\$regexFindAll",
+            "\$regexMatch",
+            "\$split",
+            "\$strLenBytes",
+            "\$strLenCP",
+            "\$strcasecmp",
+            "\$substr",
+            "\$substrBytes",
+            "\$substrCP",
+            "\$toLower",
+            "\$toUpper",
+            "\$trim",
+            "\$dateFromParts",
+            "\$dateFromString",
+            "\$dateToParts",
+            "\$dateToString",
+            "\$dayOfMonth",
+            "\$dayOfWeek",
+            "\$dayOfYear",
+            "\$hour",
+            "\$isoDayOfWeek",
+            "\$isoWeek",
+            "\$isoWeekYear",
+            "\$millisecond",
+            "\$minute",
+            "\$month",
+            "\$second",
+            "\$toDate",
+            "\$week",
+            "\$year",
+            "\$cond",
+            "\$ifNull",
+            "\$switch",
+            "\$arrayElemAt",
+            "\$arrayToObject",
+            "\$concatArrays",
+            "\$filter",
+            "\$firstN",
+            "\$in",
+            "\$indexOfArray",
+            "\$isArray",
+            "\$lastN",
+            "\$map",
+            "\$maxN",
+            "\$minN",
+            "\$objectToArray",
+            "\$range",
+            "\$reduce",
+            "\$reverseArray",
+            "\$size",
+            "\$slice",
+            "\$sortArray",
+            "\$zip",
+            "\$literal",
+            "\$type",
+            "\$convert",
+            "\$toBool",
+            "\$toDecimal",
+            "\$toDouble",
+            "\$toInt",
+            "\$toLong",
+            "\$toObjectId",
+            "\$toString",
+            "\$let",
+            "\$getField",
+            "\$setField",
+            "\$unsetField",
+            "\$mergeObjects",
+            "\$objectToArray",
+            "\$setDifference",
+            "\$setEquals",
+            "\$setIntersection",
+            "\$setIsSubset",
+            "\$setUnion",
+            "\$allElementsTrue",
+            "\$anyElementTrue",
+            "\$and",
+            "\$or",
+            "\$not",
+            "\$cmp",
+            "\$eq",
+            "\$gt",
+            "\$gte",
+            "\$lt",
+            "\$lte",
+            "\$ne",
+        )
+
+    // All MongoDB operators combined
+    private val mongoOperators =
+        queryOperators + arrayOperators + geoOperators + updateOperators +
+            pipelineStages + accumulators + expressions
 
     private val mongoMethods =
         setOf(
+            // Find operations
             "find",
             "findOne",
-            "aggregate",
-            "insertOne",
-            "insertMany",
-            "updateOne",
-            "updateMany",
-            "deleteOne",
-            "deleteMany",
-            "replaceOne",
+            // Count operations
             "countDocuments",
             "estimatedDocumentCount",
+            "count",
+            // Distinct
             "distinct",
-            "watch",
+            // Aggregation
+            "aggregate",
+            // Insert operations
+            "insertOne",
+            "insertMany",
+            // Update operations
+            "updateOne",
+            "updateMany",
+            "replaceOne",
+            // Delete operations
+            "deleteOne",
+            "deleteMany",
+            // FindAndModify operations
+            "findOneAndUpdate",
+            "findOneAndDelete",
+            "findOneAndReplace",
+            // Index operations
             "createIndex",
+            "createIndexes",
             "dropIndex",
+            "dropIndexes",
+            "getIndexes",
+            "reIndex",
+            // Cursor modifiers
             "sort",
             "limit",
             "skip",
             "project",
+            "hint",
+            "explain",
+            "batchSize",
+            "maxTimeMS",
+            "toArray",
+            "forEach",
+            "map",
+            "hasNext",
+            "next",
+            "close",
+            // Collection operations
+            "drop",
+            "renameCollection",
+            "watch",
+            "validate",
+            "stats",
+            // Bulk operations
+            "bulkWrite",
+            "initializeOrderedBulkOp",
+            "initializeUnorderedBulkOp",
         )
 
     override fun highlight(

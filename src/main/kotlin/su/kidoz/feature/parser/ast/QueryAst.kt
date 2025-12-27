@@ -295,13 +295,117 @@ data class DeleteStatement(
 
 sealed interface MongoNode : QueryNode
 
+/**
+ * MongoDB operation type enum
+ */
+enum class MongoOperationType {
+    FIND,
+    FIND_ONE,
+    COUNT_DOCUMENTS,
+    DISTINCT,
+    INSERT_ONE,
+    INSERT_MANY,
+    UPDATE_ONE,
+    UPDATE_MANY,
+    DELETE_ONE,
+    DELETE_MANY,
+    REPLACE_ONE,
+    FIND_ONE_AND_UPDATE,
+    FIND_ONE_AND_DELETE,
+    FIND_ONE_AND_REPLACE,
+    CREATE_INDEX,
+    DROP_INDEX,
+    GET_INDEXES,
+}
+
 data class MongoQuery(
     val collection: String?,
+    val operationType: MongoOperationType = MongoOperationType.FIND,
     val filter: MongoFilter?,
     val projection: MongoProjection? = null,
     val sort: MongoSort? = null,
     val limit: Int? = null,
     val skip: Int? = null,
+    val hint: String? = null,
+    val explain: Boolean = false,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB count operation result
+ */
+data class MongoCount(
+    val collection: String,
+    val filter: MongoFilter?,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB distinct operation
+ */
+data class MongoDistinct(
+    val collection: String,
+    val field: String,
+    val filter: MongoFilter?,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB update operation (updateOne, updateMany, replaceOne)
+ */
+data class MongoUpdate(
+    val collection: String,
+    val operationType: MongoOperationType,
+    val filter: MongoFilter,
+    val update: MongoValue,
+    val upsert: Boolean = false,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB findOneAnd* operations
+ */
+data class MongoFindAndModify(
+    val collection: String,
+    val operationType: MongoOperationType,
+    val filter: MongoFilter,
+    val update: MongoValue?,
+    val projection: MongoProjection? = null,
+    val sort: MongoSort? = null,
+    val upsert: Boolean = false,
+    val returnDocument: String = "before", // "before" or "after"
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB insert operation
+ */
+data class MongoInsert(
+    val collection: String,
+    val operationType: MongoOperationType,
+    val documents: List<MongoObject>,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB delete operation
+ */
+data class MongoDelete(
+    val collection: String,
+    val operationType: MongoOperationType,
+    val filter: MongoFilter,
+    override val position: SourcePosition,
+) : MongoNode
+
+/**
+ * MongoDB index operations
+ */
+data class MongoIndexOp(
+    val collection: String,
+    val operationType: MongoOperationType,
+    val keys: MongoObject? = null,
+    val options: MongoObject? = null,
+    val indexName: String? = null,
     override val position: SourcePosition,
 ) : MongoNode
 
@@ -429,6 +533,105 @@ data class LookupStage(
 data class UnwindStage(
     val path: String,
     val preserveNullAndEmpty: Boolean = false,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $addFields / $set stage - add computed fields
+ */
+data class AddFieldsStage(
+    val fields: Map<String, MongoValue>,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $replaceRoot / $replaceWith stage - replace document
+ */
+data class ReplaceRootStage(
+    val newRoot: MongoValue,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $facet stage - multiple pipelines
+ */
+data class FacetStage(
+    val facets: Map<String, List<MongoStage>>,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $bucket stage - group by boundaries
+ */
+data class BucketStage(
+    val groupBy: MongoValue,
+    val boundaries: MongoArray,
+    val defaultBucket: MongoValue? = null,
+    val output: Map<String, MongoAccumulator>? = null,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $bucketAuto stage - automatic bucketing
+ */
+data class BucketAutoStage(
+    val groupBy: MongoValue,
+    val buckets: Int,
+    val output: Map<String, MongoAccumulator>? = null,
+    val granularity: String? = null,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $count stage - count documents in pipeline
+ */
+data class CountStage(
+    val field: String,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $out stage - write to collection
+ */
+data class OutStage(
+    val collection: String,
+    val db: String? = null,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $merge stage - merge into collection
+ */
+data class MergeStage(
+    val into: String,
+    val on: List<String>? = null,
+    val whenMatched: String? = null,
+    val whenNotMatched: String? = null,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $sample stage - random sample
+ */
+data class SampleStage(
+    val size: Int,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * $redact stage - conditional field access
+ */
+data class RedactStage(
+    val expression: MongoValue,
+    override val position: SourcePosition,
+) : MongoStage
+
+/**
+ * Generic stage for unsupported/custom stages
+ */
+data class GenericStage(
+    val name: String,
+    val value: MongoValue,
     override val position: SourcePosition,
 ) : MongoStage
 

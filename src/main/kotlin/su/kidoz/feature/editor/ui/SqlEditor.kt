@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorTab
 import su.kidoz.feature.parser.QueryParserService
+import su.kidoz.feature.parser.highlight.DatabaseType
 import su.kidoz.feature.parser.highlight.SyntaxTheme
 import su.kidoz.feature.parser.validation.IssueSeverity
 import su.kidoz.feature.parser.validation.ValidationIssue
@@ -46,7 +47,8 @@ import su.kidoz.ui.theme.DBQueTheme
 import su.kidoz.ui.theme.EditorTypography
 
 /**
- * SQL Editor with syntax highlighting and validation
+ * Query Editor with syntax highlighting and validation
+ * Supports SQL, MongoDB, and Elasticsearch with auto-detection
  */
 @Composable
 fun SqlEditor(
@@ -71,13 +73,19 @@ fun SqlEditor(
         }
     }
 
+    // Detect query type for UI hints
+    val queryType =
+        remember(tab.content) {
+            parserService.detectQueryType(tab.content)
+        }
+
     // Validation state
     var validationIssues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
 
-    // Validate on text change (debounced)
+    // Validate on text change (debounced) - uses auto-detection
     LaunchedEffect(tab.content) {
         if (tab.content.isNotBlank()) {
-            val result = parserService.validateSql(tab.content)
+            val result = parserService.validate(tab.content)
             validationIssues = result.issues
         } else {
             validationIssues = emptyList()
@@ -90,10 +98,10 @@ fun SqlEditor(
 
     val extendedColors = DBQueTheme.extendedColors
 
-    // Create syntax highlighting transformation
+    // Create syntax highlighting transformation - uses auto-detection
     val syntaxHighlightTransformation =
         remember(extendedColors) {
-            SqlSyntaxHighlightTransformation(parserService)
+            QuerySyntaxHighlightTransformation(parserService)
         }
 
     // Current query range for highlighting
@@ -222,8 +230,14 @@ fun SqlEditor(
                     decorationBox = { innerTextField ->
                         Box {
                             if (tab.content.isEmpty()) {
+                                val placeholder =
+                                    when (queryType) {
+                                        DatabaseType.MONGODB -> "db.collection.find({...}) (Ctrl+Enter to execute)"
+                                        DatabaseType.ELASTICSEARCH -> "{\"query\": {...}} (Ctrl+Enter to execute)"
+                                        else -> "Enter SQL query here... (Ctrl+Enter to execute)"
+                                    }
                                 Text(
-                                    text = "Enter SQL query here... (Ctrl+Enter to execute)",
+                                    text = placeholder,
                                     style = EditorTypography,
                                     color = extendedColors.editorLineNumber,
                                 )
@@ -262,8 +276,22 @@ private fun getLineNumber(
 }
 
 /**
- * Visual transformation for SQL syntax highlighting
+ * Visual transformation for syntax highlighting
+ * Supports SQL, MongoDB, and Elasticsearch with auto-detection
  */
+class QuerySyntaxHighlightTransformation(
+    private val parserService: QueryParserService,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val highlighted = parserService.highlight(text.text, SyntaxTheme.Dark)
+        return TransformedText(highlighted, OffsetMapping.Identity)
+    }
+}
+
+/**
+ * Legacy transformation for backwards compatibility
+ */
+@Deprecated("Use QuerySyntaxHighlightTransformation instead")
 class SqlSyntaxHighlightTransformation(
     private val parserService: QueryParserService,
 ) : VisualTransformation {

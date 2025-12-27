@@ -20,77 +20,102 @@ class QueryExecutor {
         execution: QueryExecution,
     ): QueryExecutionResult =
         withContext(Dispatchers.IO) {
-            val startTime = System.currentTimeMillis()
-
             try {
-                val statement =
-                    connection.createStatement().apply {
+                connection.createStatement().use { statement ->
+                    statement.apply {
                         if (execution.maxRows > 0) maxRows = execution.maxRows
                         if (execution.timeout > 0) queryTimeout = execution.timeout
                         if (execution.fetchSize > 0) fetchSize = execution.fetchSize
                     }
 
-                val queries = splitQueries(execution.query)
-                val results = mutableListOf<QueryResult>()
+                    val queries = splitQueries(execution.query)
+                    val results = mutableListOf<QueryResult>()
 
-                for (query in queries) {
-                    val trimmedQuery = query.trim()
-                    if (trimmedQuery.isEmpty()) continue
+                    for (query in queries) {
+                        val trimmedQuery = query.trim()
+                        if (trimmedQuery.isEmpty()) continue
 
-                    logger.debug { "Executing query: $trimmedQuery" }
+                        logger.debug { "Executing query: $trimmedQuery" }
 
-                    val hasResultSet = statement.execute(trimmedQuery)
-                    val execTime = System.currentTimeMillis() - startTime
+                        val queryStartTime = System.currentTimeMillis()
+                        val hasResultSet = statement.execute(trimmedQuery)
+                        val execTime = System.currentTimeMillis() - queryStartTime
 
-                    if (hasResultSet) {
-                        statement.resultSet?.use { rs ->
-                            results.add(mapResultSet(rs, trimmedQuery, execTime))
+                        if (hasResultSet) {
+                            statement.resultSet?.use { rs ->
+                                results.add(mapResultSet(rs, trimmedQuery, execTime))
+                            }
+                        } else {
+                            val affectedRows = statement.updateCount
+                            results.add(
+                                QueryResult(
+                                    columns = emptyList(),
+                                    rows = emptyList(),
+                                    rowCount = 0,
+                                    affectedRows = affectedRows,
+                                    executionTimeMs = execTime,
+                                    query = trimmedQuery,
+                                    isResultSet = false,
+                                ),
+                            )
                         }
+
+                        // Handle multiple results from a single execute call.
+                        while (true) {
+                            val hasMoreResults = statement.moreResults
+                            val updateCount = statement.updateCount
+
+                            if (!hasMoreResults && updateCount == -1) {
+                                break
+                            }
+
+                            if (hasMoreResults) {
+                                statement.resultSet?.use { rs ->
+                                    results.add(
+                                        mapResultSet(
+                                            rs,
+                                            trimmedQuery,
+                                            System.currentTimeMillis() - queryStartTime,
+                                        ),
+                                    )
+                                }
+                            } else {
+                                results.add(
+                                    QueryResult(
+                                        columns = emptyList(),
+                                        rows = emptyList(),
+                                        rowCount = 0,
+                                        affectedRows = updateCount,
+                                        executionTimeMs = System.currentTimeMillis() - queryStartTime,
+                                        query = trimmedQuery,
+                                        isResultSet = false,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+
+                    // Collect warnings
+                    val warnings = mutableListOf<String>()
+                    var warning = statement.warnings
+                    while (warning != null) {
+                        warnings.add(warning.message ?: "Unknown warning")
+                        warning = warning.nextWarning
+                    }
+
+                    if (results.size == 1) {
+                        QueryExecutionResult.Success(results.first().copy(warnings = warnings))
                     } else {
-                        val affectedRows = statement.updateCount
-                        results.add(
-                            QueryResult(
-                                columns = emptyList(),
-                                rows = emptyList(),
-                                rowCount = 0,
-                                affectedRows = affectedRows,
-                                executionTimeMs = execTime,
-                                query = trimmedQuery,
-                                isResultSet = false,
-                            ),
+                        QueryExecutionResult.MultiResult(
+                            results.mapIndexed { index, result ->
+                                if (index == results.lastIndex) {
+                                    result.copy(warnings = warnings)
+                                } else {
+                                    result
+                                }
+                            },
                         )
                     }
-
-                    // Handle multiple result sets
-                    while (statement.moreResults || statement.updateCount != -1) {
-                        if (statement.moreResults) {
-                            statement.resultSet?.use { rs ->
-                                results.add(mapResultSet(rs, trimmedQuery, System.currentTimeMillis() - startTime))
-                            }
-                        }
-                    }
-                }
-
-                // Collect warnings
-                val warnings = mutableListOf<String>()
-                var warning = statement.warnings
-                while (warning != null) {
-                    warnings.add(warning.message ?: "Unknown warning")
-                    warning = warning.nextWarning
-                }
-
-                if (results.size == 1) {
-                    QueryExecutionResult.Success(results.first().copy(warnings = warnings))
-                } else {
-                    QueryExecutionResult.MultiResult(
-                        results.mapIndexed { index, result ->
-                            if (index == results.lastIndex) {
-                                result.copy(warnings = warnings)
-                            } else {
-                                result
-                            }
-                        },
-                    )
                 }
             } catch (e: SQLException) {
                 logger.error(e) { "Query execution failed" }
