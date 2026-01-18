@@ -112,6 +112,9 @@ fun MainWindow() {
                     is EditorEffect.ShowMessage -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+                    is EditorEffect.QuickFixesAvailable -> {
+                        // Quick fixes are handled within SqlEditor component
+                    }
                 }
             }.launchIn(this)
 

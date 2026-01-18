@@ -148,6 +148,8 @@ private fun getTypeIcon(type: AutocompleteType): ImageVector =
         AutocompleteType.FUNCTION -> Icons.Default.Functions
         AutocompleteType.SCHEMA -> Icons.Default.Schema
         AutocompleteType.DATABASE -> Icons.Default.Storage
+        AutocompleteType.ALIAS -> Icons.Default.Bookmark
+        AutocompleteType.CTE -> Icons.Default.AccountTree
     }
 
 @Composable
@@ -161,5 +163,7 @@ private fun getTypeColor(type: AutocompleteType): Color {
         AutocompleteType.FUNCTION -> extendedColors.syntaxFunction
         AutocompleteType.SCHEMA -> MaterialTheme.colorScheme.tertiary
         AutocompleteType.DATABASE -> MaterialTheme.colorScheme.primary
+        AutocompleteType.ALIAS -> extendedColors.treeTable.copy(alpha = 0.8f)
+        AutocompleteType.CTE -> extendedColors.syntaxFunction.copy(alpha = 0.8f)
     }
 }

@@ -23,6 +23,8 @@ enum class AutocompleteType {
     FUNCTION,
     SCHEMA,
     DATABASE,
+    ALIAS,
+    CTE,
 }
 
 class AutocompleteProvider(
@@ -33,6 +35,9 @@ class AutocompleteProvider(
     private var cachedTables: List<TableInfo> = emptyList()
     private var cachedColumns: Map<String, List<ColumnInfo>> = emptyMap()
     private var lastConnectionId: String? = null
+
+    private val scopeAnalyzer = QueryScopeAnalyzer()
+    private val functionSignatureProvider = FunctionSignatureProvider()
 
     private val sqlKeywords =
         listOf(
@@ -122,52 +127,6 @@ class AutocompleteProvider(
             "RETURNING",
         )
 
-    private val sqlFunctions =
-        listOf(
-            "COUNT",
-            "SUM",
-            "AVG",
-            "MIN",
-            "MAX",
-            "COALESCE",
-            "NULLIF",
-            "CAST",
-            "CONCAT",
-            "SUBSTRING",
-            "TRIM",
-            "UPPER",
-            "LOWER",
-            "LENGTH",
-            "REPLACE",
-            "NOW",
-            "CURRENT_DATE",
-            "CURRENT_TIME",
-            "CURRENT_TIMESTAMP",
-            "DATE",
-            "TIME",
-            "TIMESTAMP",
-            "EXTRACT",
-            "DATE_PART",
-            "ABS",
-            "CEIL",
-            "FLOOR",
-            "ROUND",
-            "MOD",
-            "POWER",
-            "SQRT",
-            "ROW_NUMBER",
-            "RANK",
-            "DENSE_RANK",
-            "NTILE",
-            "LAG",
-            "LEAD",
-            "FIRST_VALUE",
-            "LAST_VALUE",
-            "NTH_VALUE",
-            "OVER",
-            "PARTITION",
-        )
-
     suspend fun refreshCache() =
         withContext(Dispatchers.IO) {
             val connection = connectionManager.activeConnection ?: return@withContext
@@ -215,36 +174,47 @@ class AutocompleteProvider(
 
             val results = mutableListOf<AutocompleteItem>()
 
+            // Analyze query scope for alias and CTE resolution
+            val scope = scopeAnalyzer.analyze(text, cursorPosition)
+
             // Check context
             val context = analyzeContext(beforeCursor)
 
             when (context) {
                 AutocompleteContext.AFTER_FROM, AutocompleteContext.AFTER_JOIN -> {
-                    // Suggest tables
+                    // Suggest tables, views, and CTEs
                     results.addAll(getTableSuggestions(currentWord))
+                    results.addAll(getCTESuggestions(scope, currentWord))
                 }
                 AutocompleteContext.AFTER_SELECT, AutocompleteContext.AFTER_WHERE,
                 AutocompleteContext.AFTER_SET, AutocompleteContext.AFTER_ORDER_BY,
                 -> {
-                    // Suggest columns first, then tables, then keywords
-                    results.addAll(getColumnSuggestions(currentWord, beforeCursor))
+                    // Suggest columns first (with alias awareness), then tables, then keywords
+                    results.addAll(getColumnSuggestionsWithScope(currentWord, scope))
+                    results.addAll(getAliasSuggestions(scope, currentWord))
                     results.addAll(getTableSuggestions(currentWord))
-                    results.addAll(getFunctionSuggestions(currentWord))
+                    results.addAll(getFunctionSuggestionsEnhanced(currentWord))
                 }
                 AutocompleteContext.AFTER_DOT -> {
-                    // Suggest columns for the table before the dot
-                    val tableAlias = getTableBeforeDot(beforeCursor)
-                    results.addAll(getColumnsForTable(tableAlias, currentWord))
+                    // Suggest columns for the table/alias before the dot
+                    val tableOrAlias = scopeAnalyzer.getTableBeforeDot(beforeCursor, beforeCursor.length - 1)
+                    if (tableOrAlias != null) {
+                        results.addAll(getColumnsForTableOrAlias(tableOrAlias, currentWord, scope))
+                    }
+                }
+                AutocompleteContext.AFTER_ON -> {
+                    // Suggest columns for JOIN condition - prioritize FK relationships
+                    results.addAll(getJoinColumnSuggestions(currentWord, scope, beforeCursor))
                 }
                 else -> {
                     // Default: keywords first, then tables
                     results.addAll(getKeywordSuggestions(currentWord))
                     results.addAll(getTableSuggestions(currentWord))
-                    results.addAll(getFunctionSuggestions(currentWord))
+                    results.addAll(getFunctionSuggestionsEnhanced(currentWord))
                 }
             }
 
-            results.distinctBy { it.text }.take(20)
+            results.distinctBy { it.text.lowercase() }.take(20)
         }
 
     private fun analyzeContext(textBeforeCursor: String): AutocompleteContext {
@@ -254,6 +224,7 @@ class AutocompleteProvider(
             upper.endsWith(".") -> AutocompleteContext.AFTER_DOT
             upper.matches(Regex(".*\\bFROM\\s+\\w*$")) -> AutocompleteContext.AFTER_FROM
             upper.matches(Regex(".*\\bJOIN\\s+\\w*$")) -> AutocompleteContext.AFTER_JOIN
+            upper.matches(Regex(".*\\bON\\s+.*")) -> AutocompleteContext.AFTER_ON
             upper.matches(Regex(".*\\bSELECT\\s+.*")) && !upper.contains("FROM") -> AutocompleteContext.AFTER_SELECT
             upper.matches(Regex(".*\\bWHERE\\s+.*")) -> AutocompleteContext.AFTER_WHERE
             upper.matches(Regex(".*\\bSET\\s+.*")) -> AutocompleteContext.AFTER_SET
@@ -261,15 +232,6 @@ class AutocompleteProvider(
             upper.matches(Regex(".*\\bGROUP\\s+BY\\s+.*")) -> AutocompleteContext.AFTER_ORDER_BY
             else -> AutocompleteContext.GENERAL
         }
-    }
-
-    private fun getTableBeforeDot(text: String): String {
-        val dotIndex = text.lastIndexOf('.')
-        if (dotIndex <= 0) return ""
-
-        val beforeDot = text.substring(0, dotIndex)
-        val wordStart = beforeDot.indexOfLast { it.isWhitespace() || it in "(),;" } + 1
-        return beforeDot.substring(wordStart)
     }
 
     private fun getKeywordSuggestions(prefix: String): List<AutocompleteItem> =
@@ -295,41 +257,134 @@ class AutocompleteProvider(
                 )
             }
 
-    private fun getColumnSuggestions(
+    private fun getCTESuggestions(
+        scope: QueryScope,
         prefix: String,
-        context: String,
-    ): List<AutocompleteItem> {
-        // Try to find referenced tables in the query
-        val referencedTables = findReferencedTables(context)
-
-        val columns =
-            if (referencedTables.isNotEmpty()) {
-                referencedTables.flatMap { tableName ->
-                    cachedColumns[tableName] ?: emptyList()
-                }
-            } else {
-                cachedColumns.values.flatten()
+    ): List<AutocompleteItem> =
+        scope.cteDefinitions.values
+            .filter { it.name.uppercase().startsWith(prefix) }
+            .map { cte ->
+                AutocompleteItem(
+                    text = cte.name,
+                    displayText = cte.name,
+                    type = AutocompleteType.CTE,
+                    detail = "CTE (${cte.columns.size} columns)",
+                )
             }
 
-        return columns
-            .filter { it.name.uppercase().startsWith(prefix) }
-            .map { column ->
+    private fun getAliasSuggestions(
+        scope: QueryScope,
+        prefix: String,
+    ): List<AutocompleteItem> =
+        scope.aliases.entries
+            .filter { it.key.uppercase().startsWith(prefix) }
+            .map { (alias, tableRef) ->
                 AutocompleteItem(
-                    text = column.name,
-                    displayText = column.name,
-                    type = AutocompleteType.COLUMN,
-                    detail = column.typeDisplay,
+                    text = alias,
+                    displayText = alias,
+                    type = AutocompleteType.ALIAS,
+                    detail = "alias for ${tableRef.tableName}",
                 )
-            }.distinctBy { it.text }
+            }
+
+    private fun getColumnSuggestionsWithScope(
+        prefix: String,
+        scope: QueryScope,
+    ): List<AutocompleteItem> {
+        val results = mutableListOf<AutocompleteItem>()
+
+        // Get columns from all tables/aliases in scope
+        scope.getAllTableRefs().forEach { (alias, tableRef) ->
+            if (tableRef.isSubquery) {
+                // CTE or subquery columns
+                tableRef.subqueryColumns
+                    .filter { it.uppercase().startsWith(prefix) }
+                    .forEach { column ->
+                        results.add(
+                            AutocompleteItem(
+                                text = column,
+                                displayText = column,
+                                type = AutocompleteType.COLUMN,
+                                detail = "from $alias",
+                            ),
+                        )
+                    }
+            } else {
+                // Regular table columns
+                cachedColumns[tableRef.tableName]
+                    ?.filter { it.name.uppercase().startsWith(prefix) }
+                    ?.forEach { column ->
+                        results.add(
+                            AutocompleteItem(
+                                text = column.name,
+                                displayText = column.name,
+                                type = AutocompleteType.COLUMN,
+                                detail = "${column.typeDisplay} (${tableRef.tableName})",
+                            ),
+                        )
+                    }
+            }
+        }
+
+        // If scope is empty, fall back to all columns
+        if (results.isEmpty()) {
+            cachedColumns.values
+                .flatten()
+                .filter { it.name.uppercase().startsWith(prefix) }
+                .forEach { column ->
+                    results.add(
+                        AutocompleteItem(
+                            text = column.name,
+                            displayText = column.name,
+                            type = AutocompleteType.COLUMN,
+                            detail = column.typeDisplay,
+                        ),
+                    )
+                }
+        }
+
+        return results.distinctBy { it.text.lowercase() }
+    }
+
+    private fun getColumnsForTableOrAlias(
+        tableOrAlias: String,
+        prefix: String,
+        scope: QueryScope,
+    ): List<AutocompleteItem> {
+        // First try to resolve as an alias
+        val resolved = scope.resolveAlias(tableOrAlias)
+
+        return if (resolved != null) {
+            if (resolved.isSubquery) {
+                // CTE or subquery - use declared columns
+                resolved.subqueryColumns
+                    .filter { prefix.isEmpty() || it.uppercase().startsWith(prefix) }
+                    .map { column ->
+                        AutocompleteItem(
+                            text = column,
+                            displayText = column,
+                            type = AutocompleteType.COLUMN,
+                            detail = "from ${resolved.tableName}",
+                        )
+                    }
+            } else {
+                // Regular table alias
+                getColumnsForTable(resolved.tableName, prefix)
+            }
+        } else {
+            // Try as direct table name
+            getColumnsForTable(tableOrAlias, prefix)
+        }
     }
 
     private fun getColumnsForTable(
         tableName: String,
         prefix: String,
     ): List<AutocompleteItem> {
-        // Find actual table name (might be an alias)
-        val actualTableName = findActualTableName(tableName)
-        val columns = cachedColumns[actualTableName] ?: cachedColumns[tableName] ?: return emptyList()
+        val columns =
+            cachedColumns[tableName]
+                ?: cachedColumns.entries.find { it.key.equals(tableName, ignoreCase = true) }?.value
+                ?: return emptyList()
 
         return columns
             .filter { prefix.isEmpty() || it.name.uppercase().startsWith(prefix) }
@@ -343,50 +398,56 @@ class AutocompleteProvider(
             }
     }
 
-    private fun getFunctionSuggestions(prefix: String): List<AutocompleteItem> =
-        sqlFunctions
-            .filter { it.startsWith(prefix) }
-            .map { func ->
-                AutocompleteItem(
-                    text = func,
-                    displayText = "$func()",
-                    type = AutocompleteType.FUNCTION,
-                    insertText = "$func(",
-                )
-            }
+    private fun getJoinColumnSuggestions(
+        prefix: String,
+        scope: QueryScope,
+        beforeCursor: String,
+    ): List<AutocompleteItem> {
+        val results = mutableListOf<AutocompleteItem>()
 
-    private fun findReferencedTables(query: String): List<String> {
-        val upper = query.uppercase()
-        val tables = mutableListOf<String>()
-
-        // Find tables after FROM
-        val fromRegex = Regex("\\bFROM\\s+(\\w+)", RegexOption.IGNORE_CASE)
-        fromRegex.findAll(upper).forEach { match ->
-            val tableName = match.groupValues[1]
-            cachedTables.find { it.name.uppercase() == tableName }?.let {
-                tables.add(it.name)
+        // Get all table references for column suggestions
+        scope.getAllTableRefs().forEach { (alias, tableRef) ->
+            if (!tableRef.isSubquery) {
+                cachedColumns[tableRef.tableName]
+                    ?.filter { it.name.uppercase().startsWith(prefix) }
+                    ?.forEach { column ->
+                        // Prioritize ID columns and columns with similar names
+                        @Suppress("UNUSED_VARIABLE")
+                        val priority =
+                            when {
+                                column.name.endsWith("_id", ignoreCase = true) -> 0
+                                column.name.equals("id", ignoreCase = true) -> 1
+                                column.name.contains("_id_", ignoreCase = true) -> 2
+                                else -> 3
+                            }
+                        results.add(
+                            AutocompleteItem(
+                                text = "$alias.${column.name}",
+                                displayText = "$alias.${column.name}",
+                                type = AutocompleteType.COLUMN,
+                                detail = "${column.typeDisplay} (join key)",
+                            ),
+                        )
+                    }
             }
         }
 
-        // Find tables after JOIN
-        val joinRegex = Regex("\\bJOIN\\s+(\\w+)", RegexOption.IGNORE_CASE)
-        joinRegex.findAll(upper).forEach { match ->
-            val tableName = match.groupValues[1]
-            cachedTables.find { it.name.uppercase() == tableName }?.let {
-                tables.add(it.name)
-            }
-        }
-
-        return tables.distinct()
+        return results.distinctBy { it.text.lowercase() }
     }
 
-    private fun findActualTableName(aliasOrName: String): String {
-        // This is a simplified version - in a full implementation,
-        // we would parse the query to find table aliases
-        return cachedTables
-            .find {
-                it.name.equals(aliasOrName, ignoreCase = true)
-            }?.name ?: aliasOrName
+    private fun getFunctionSuggestionsEnhanced(prefix: String): List<AutocompleteItem> {
+        val signatures = functionSignatureProvider.getFunctionsByPrefix(prefix)
+
+        return signatures.map { sig ->
+            val paramHint = functionSignatureProvider.formatShortHint(sig)
+            AutocompleteItem(
+                text = sig.name,
+                displayText = paramHint,
+                type = AutocompleteType.FUNCTION,
+                detail = sig.description,
+                insertText = "${sig.name}(",
+            )
+        }
     }
 
     fun invalidateCache() {
@@ -401,6 +462,7 @@ enum class AutocompleteContext {
     AFTER_SELECT,
     AFTER_FROM,
     AFTER_JOIN,
+    AFTER_ON,
     AFTER_WHERE,
     AFTER_SET,
     AFTER_ORDER_BY,

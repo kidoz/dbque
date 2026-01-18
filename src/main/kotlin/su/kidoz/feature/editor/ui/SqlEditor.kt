@@ -1,8 +1,22 @@
 package su.kidoz.feature.editor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -13,24 +27,34 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -49,8 +73,8 @@ import su.kidoz.ui.theme.DBQueTheme
 import su.kidoz.ui.theme.EditorTypography
 
 /**
- * Query Editor with syntax highlighting and validation
- * Supports SQL, MongoDB, and Elasticsearch with auto-detection
+ * Query Editor with syntax highlighting, live validation, and quick-fixes.
+ * Supports SQL, MongoDB, and Elasticsearch with auto-detection.
  */
 @Composable
 fun SqlEditor(
@@ -81,18 +105,8 @@ fun SqlEditor(
             parserService.detectQueryType(tab.content)
         }
 
-    // Validation state
-    var validationIssues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
-
-    // Validate on text change (debounced) - uses auto-detection
-    LaunchedEffect(tab.content) {
-        if (tab.content.isNotBlank()) {
-            val result = parserService.validate(tab.content)
-            validationIssues = result.issues
-        } else {
-            validationIssues = emptyList()
-        }
-    }
+    // Use validation issues from tab state (managed by ViewModel via LiveValidator)
+    val validationIssues = tab.validationIssues
 
     val focusRequester = remember { FocusRequester() }
     val verticalScroll = rememberScrollState()
@@ -107,15 +121,15 @@ fun SqlEditor(
             QuerySyntaxHighlightTransformation(parserService, syntaxTheme)
         }
 
-    // Current query range for highlighting
-    val currentQuery = tab.currentQuery
-
     Column(modifier = modifier) {
         // Execution toolbar
         EditorToolbar(
             queryCount = tab.queryCount,
             currentQueryNumber = tab.currentQueryNumber,
             selectedText = tab.selectedText,
+            isValidating = tab.isValidating,
+            issueCount = validationIssues.size,
+            errorCount = validationIssues.count { it.severity == IssueSeverity.ERROR },
             onExecuteCurrent = { onEvent(EditorEvent.ExecuteCurrentQuery) },
             onExecuteAll = { onEvent(EditorEvent.ExecuteAllQueries) },
             onExecuteSelected = { onEvent(EditorEvent.ExecuteSelectedQuery) },
@@ -128,7 +142,7 @@ fun SqlEditor(
                     .weight(1f)
                     .background(extendedColors.editorBackground),
         ) {
-            // Line numbers
+            // Line numbers with issue indicators
             val lineCount = tab.content.count { it == '\n' } + 1
             Column(
                 modifier =
@@ -140,32 +154,51 @@ fun SqlEditor(
                         .padding(end = 8.dp),
             ) {
                 for (i in 1..lineCount) {
-                    val hasError =
-                        validationIssues.any { issue ->
-                            issue.severity == IssueSeverity.ERROR && getLineNumber(tab.content, issue.position.start) == i
+                    val lineIssues =
+                        validationIssues.filter { issue ->
+                            getLineNumber(tab.content, issue.position.start) == i
                         }
-                    val hasWarning =
-                        validationIssues.any { issue ->
-                            issue.severity == IssueSeverity.WARNING && getLineNumber(tab.content, issue.position.start) == i
-                        }
+                    val hasError = lineIssues.any { it.severity == IssueSeverity.ERROR }
+                    val hasWarning = lineIssues.any { it.severity == IssueSeverity.WARNING }
 
                     val lineColor =
                         when {
-                            hasError -> Color(0xFFF44747)
-                            hasWarning -> Color(0xFFFFCC00)
+                            hasError -> IssueColors.error
+                            hasWarning -> IssueColors.warning
                             else -> extendedColors.editorLineNumber
                         }
 
-                    Text(
-                        text = i.toString(),
-                        style = EditorTypography,
-                        color = lineColor,
+                    Row(
                         modifier = Modifier.fillMaxWidth().padding(end = 8.dp, top = 2.dp),
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Issue indicator dot
+                        if (lineIssues.isNotEmpty()) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(6.dp)
+                                        .background(lineColor, androidx.compose.foundation.shape.CircleShape)
+                                        .clickable {
+                                            lineIssues.firstOrNull()?.let { issue ->
+                                                onEvent(EditorEvent.NavigateToIssue(issue))
+                                            }
+                                        },
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+
+                        Text(
+                            text = i.toString(),
+                            style = EditorTypography,
+                            color = lineColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
 
-            // Editor content - use BoxWithConstraints to get available height
+            // Editor content
             BoxWithConstraints(
                 modifier =
                     Modifier
@@ -198,6 +231,16 @@ fun SqlEditor(
                                 .onPreviewKeyEvent { keyEvent ->
                                     if (keyEvent.type == KeyEventType.KeyDown) {
                                         when {
+                                            // Alt+Enter: Show quick-fixes for issue at cursor
+                                            keyEvent.isAltPressed &&
+                                                !keyEvent.isCtrlPressed &&
+                                                keyEvent.key == Key.Enter -> {
+                                                val issueAtCursor = findIssueAtPosition(validationIssues, tab.cursorPosition)
+                                                if (issueAtCursor != null) {
+                                                    onEvent(EditorEvent.ShowQuickFixes(issueAtCursor))
+                                                }
+                                                true
+                                            }
                                             // Ctrl+Enter: Execute current query at cursor
                                             keyEvent.isCtrlPressed &&
                                                 !keyEvent.isShiftPressed &&
@@ -263,10 +306,12 @@ fun SqlEditor(
             }
         }
 
-        // Validation issues panel
+        // Validation issues panel - clickable to navigate
         if (validationIssues.isNotEmpty()) {
             ValidationIssuesPanel(
                 issues = validationIssues,
+                onIssueClick = { issue -> onEvent(EditorEvent.NavigateToIssue(issue)) },
+                onQuickFix = { issue -> onEvent(EditorEvent.ShowQuickFixes(issue)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -278,16 +323,20 @@ fun SqlEditor(
 }
 
 /**
- * Get line number for a given character offset
+ * Find issue at or near the given position
  */
-private fun getLineNumber(
-    text: String,
-    offset: Int,
-): Int {
-    if (offset <= 0) return 1
-    val safeOffset = offset.coerceAtMost(text.length)
-    return text.substring(0, safeOffset).count { it == '\n' } + 1
-}
+private fun findIssueAtPosition(
+    issues: List<ValidationIssue>,
+    position: Int,
+): ValidationIssue? =
+    issues.find { issue ->
+        position >= issue.position.start && position <= issue.position.end
+    } ?: issues.minByOrNull { issue ->
+        minOf(
+            kotlin.math.abs(position - issue.position.start),
+            kotlin.math.abs(position - issue.position.end),
+        )
+    }
 
 /**
  * Visual transformation for syntax highlighting
@@ -304,19 +353,6 @@ class QuerySyntaxHighlightTransformation(
 }
 
 /**
- * Legacy transformation for backwards compatibility
- */
-@Deprecated("Use QuerySyntaxHighlightTransformation instead")
-class SqlSyntaxHighlightTransformation(
-    private val parserService: QueryParserService,
-) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val highlighted = parserService.highlightSql(text.text, SyntaxTheme.Dark)
-        return TransformedText(highlighted, OffsetMapping.Identity)
-    }
-}
-
-/**
  * Toolbar for query execution with query count and execution buttons
  */
 @Composable
@@ -324,6 +360,9 @@ private fun EditorToolbar(
     queryCount: Int,
     currentQueryNumber: Int,
     selectedText: String,
+    isValidating: Boolean,
+    issueCount: Int,
+    errorCount: Int,
     onExecuteCurrent: () -> Unit,
     onExecuteAll: () -> Unit,
     onExecuteSelected: () -> Unit,
@@ -448,9 +487,56 @@ private fun EditorToolbar(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // Validation status
+            if (isValidating) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Validating...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            } else if (issueCount > 0) {
+                if (errorCount > 0) {
+                    Icon(
+                        imageVector = Icons.Default.Error,
+                        contentDescription = "Errors",
+                        tint = IssueColors.error,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$errorCount error${if (errorCount > 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = IssueColors.error,
+                    )
+                }
+                if (issueCount - errorCount > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Warnings",
+                        tint = IssueColors.warning,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${issueCount - errorCount} warning${if (issueCount - errorCount > 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = IssueColors.warning,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
             // Keyboard shortcuts hint
             Text(
-                text = "Ctrl+E: Run | Ctrl+L: Format",
+                text = "Ctrl+E: Run | Alt+Enter: Quick Fix",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
@@ -459,11 +545,13 @@ private fun EditorToolbar(
 }
 
 /**
- * Panel showing validation issues
+ * Panel showing validation issues with click-to-navigate
  */
 @Composable
 private fun ValidationIssuesPanel(
     issues: List<ValidationIssue>,
+    onIssueClick: (ValidationIssue) -> Unit,
+    onQuickFix: (ValidationIssue) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -482,7 +570,11 @@ private fun ValidationIssuesPanel(
         issues.take(5).forEach { issue ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 2.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onIssueClick(issue) }
+                        .padding(vertical = 2.dp),
             ) {
                 Icon(
                     imageVector =
@@ -492,27 +584,33 @@ private fun ValidationIssuesPanel(
                             else -> Icons.Default.Info
                         },
                     contentDescription = issue.severity.name,
-                    tint =
-                        when (issue.severity) {
-                            IssueSeverity.ERROR -> Color(0xFFF44747)
-                            IssueSeverity.WARNING -> Color(0xFFFFCC00)
-                            IssueSeverity.INFO -> Color(0xFF3794FF)
-                            IssueSeverity.HINT -> Color(0xFF6A9955)
-                        },
+                    tint = IssueColors.forSeverity(issue.severity),
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "[${issue.code}] ${issue.message}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                issue.suggestion?.let { suggestion ->
-                    Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "($suggestion)",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        text = "[${issue.code}] ${issue.message}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    issue.suggestion?.let { suggestion ->
+                        Text(
+                            text = suggestion,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        )
+                    }
+                }
+                // Quick-fix button
+                TextButton(
+                    onClick = { onQuickFix(issue) },
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text(
+                        text = "Fix",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -524,145 +622,6 @@ private fun ValidationIssuesPanel(
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-    }
-}
-
-/**
- * Legacy highlight function - replaced by QueryParserService
- */
-@Composable
-@Deprecated("Use QueryParserService instead", replaceWith = ReplaceWith("parserService.highlightSql(text)"))
-fun highlightSql(text: String): AnnotatedString {
-    val extendedColors = DBQueTheme.extendedColors
-
-    return buildAnnotatedString {
-        append(text)
-
-        val keywords =
-            listOf(
-                "SELECT",
-                "FROM",
-                "WHERE",
-                "AND",
-                "OR",
-                "NOT",
-                "IN",
-                "IS",
-                "NULL",
-                "ORDER",
-                "BY",
-                "GROUP",
-                "HAVING",
-                "LIMIT",
-                "OFFSET",
-                "AS",
-                "ON",
-                "JOIN",
-                "LEFT",
-                "RIGHT",
-                "INNER",
-                "OUTER",
-                "FULL",
-                "CROSS",
-                "INSERT",
-                "INTO",
-                "VALUES",
-                "UPDATE",
-                "SET",
-                "DELETE",
-                "CREATE",
-                "ALTER",
-                "DROP",
-                "TABLE",
-                "INDEX",
-                "VIEW",
-                "DATABASE",
-                "PRIMARY",
-                "KEY",
-                "FOREIGN",
-                "REFERENCES",
-                "UNIQUE",
-                "CHECK",
-                "DEFAULT",
-                "AUTO_INCREMENT",
-                "CASCADE",
-                "RESTRICT",
-                "BEGIN",
-                "COMMIT",
-                "ROLLBACK",
-                "TRANSACTION",
-                "UNION",
-                "INTERSECT",
-                "EXCEPT",
-                "ALL",
-                "DISTINCT",
-                "ASC",
-                "DESC",
-                "NULLS",
-                "FIRST",
-                "LAST",
-                "CASE",
-                "WHEN",
-                "THEN",
-                "ELSE",
-                "END",
-                "LIKE",
-                "BETWEEN",
-                "EXISTS",
-                "ANY",
-                "SOME",
-            )
-
-        // Highlight keywords
-        keywords.forEach { keyword ->
-            val regex = Regex("\\b$keyword\\b", RegexOption.IGNORE_CASE)
-            regex.findAll(text).forEach { match ->
-                addStyle(
-                    SpanStyle(color = extendedColors.syntaxKeyword),
-                    match.range.first,
-                    match.range.last + 1,
-                )
-            }
-        }
-
-        // Highlight strings
-        val stringRegex = Regex("'[^']*'")
-        stringRegex.findAll(text).forEach { match ->
-            addStyle(
-                SpanStyle(color = extendedColors.syntaxString),
-                match.range.first,
-                match.range.last + 1,
-            )
-        }
-
-        // Highlight numbers
-        val numberRegex = Regex("\\b\\d+(\\.\\d+)?\\b")
-        numberRegex.findAll(text).forEach { match ->
-            addStyle(
-                SpanStyle(color = extendedColors.syntaxNumber),
-                match.range.first,
-                match.range.last + 1,
-            )
-        }
-
-        // Highlight comments
-        val lineCommentRegex = Regex("--.*$", RegexOption.MULTILINE)
-        lineCommentRegex.findAll(text).forEach { match ->
-            addStyle(
-                SpanStyle(color = extendedColors.syntaxComment),
-                match.range.first,
-                match.range.last + 1,
-            )
-        }
-
-        val blockCommentRegex = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
-        blockCommentRegex.findAll(text).forEach { match ->
-            addStyle(
-                SpanStyle(color = extendedColors.syntaxComment),
-                match.range.first,
-                match.range.last + 1,
             )
         }
     }

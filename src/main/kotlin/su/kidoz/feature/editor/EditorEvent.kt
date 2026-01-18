@@ -1,5 +1,7 @@
 package su.kidoz.feature.editor
 
+import su.kidoz.feature.editor.quickfix.QuickFix
+import su.kidoz.feature.parser.validation.ValidationIssue
 import su.kidoz.mvi.UiEvent
 
 sealed interface EditorEvent : UiEvent {
@@ -61,5 +63,35 @@ sealed interface EditorEvent : UiEvent {
         val find: String,
         val replace: String,
         val replaceAll: Boolean,
+    ) : EditorEvent
+
+    // Validation events
+
+    /** Internal event when validation completes */
+    data class ValidationCompleted(
+        val tabId: String,
+        val issues: List<ValidationIssue>,
+    ) : EditorEvent
+
+    /** Navigate cursor to the position of a validation issue */
+    data class NavigateToIssue(
+        val issue: ValidationIssue,
+    ) : EditorEvent
+
+    /** Select an issue to show quick-fixes */
+    data class SelectIssue(
+        val issue: ValidationIssue?,
+    ) : EditorEvent
+
+    // Quick-fix events
+
+    /** Show available quick-fixes for an issue */
+    data class ShowQuickFixes(
+        val issue: ValidationIssue,
+    ) : EditorEvent
+
+    /** Apply a quick-fix to the current tab */
+    data class ApplyQuickFix(
+        val quickFix: QuickFix,
     ) : EditorEvent
 }

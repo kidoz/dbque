@@ -1,5 +1,6 @@
 package su.kidoz.feature.editor
 
+import su.kidoz.feature.parser.validation.ValidationIssue
 import su.kidoz.mvi.UiState
 import java.util.UUID
 
@@ -23,6 +24,9 @@ data class EditorTab(
     val connectionId: String? = null,
     val undoStack: List<EditorSnapshot> = emptyList(),
     val redoStack: List<EditorSnapshot> = emptyList(),
+    val validationIssues: List<ValidationIssue> = emptyList(),
+    val isValidating: Boolean = false,
+    val selectedIssue: ValidationIssue? = null,
 ) {
     val selectedText: String
         get() =

@@ -1,6 +1,8 @@
 package su.kidoz.feature.editor
 
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import su.kidoz.core.model.QueryExecution
 import su.kidoz.core.model.QueryExecutionResult
@@ -9,6 +11,10 @@ import su.kidoz.core.model.QueryResult
 import su.kidoz.core.repository.QueryHistoryRepository
 import su.kidoz.database.ConnectionManager
 import su.kidoz.database.executor.QueryExecutor
+import su.kidoz.feature.editor.quickfix.QuickFix
+import su.kidoz.feature.editor.quickfix.QuickFixProvider
+import su.kidoz.feature.editor.quickfix.apply
+import su.kidoz.feature.editor.validation.LiveValidator
 import su.kidoz.mvi.MviViewModel
 
 class EditorViewModel(
@@ -18,6 +24,17 @@ class EditorViewModel(
 ) : MviViewModel<EditorState, EditorEvent, EditorEffect>(EditorState()) {
     private var executionJob: Job? = null
     private var tabCounter = 1
+
+    private val liveValidator = LiveValidator()
+    private val quickFixProvider = QuickFixProvider()
+
+    init {
+        // Collect validation results
+        liveValidator.validationResults
+            .onEach { result ->
+                onEvent(EditorEvent.ValidationCompleted(result.tabId, result.issues))
+            }.launchIn(viewModelScope)
+    }
 
     override fun onEvent(event: EditorEvent) {
         when (event) {
@@ -38,6 +55,11 @@ class EditorViewModel(
             is EditorEvent.Undo -> undo()
             is EditorEvent.Redo -> redo()
             is EditorEvent.FindReplace -> findReplace(event.find, event.replace, event.replaceAll)
+            is EditorEvent.ValidationCompleted -> handleValidationCompleted(event.tabId, event.issues)
+            is EditorEvent.NavigateToIssue -> navigateToIssue(event.issue)
+            is EditorEvent.SelectIssue -> selectIssue(event.issue)
+            is EditorEvent.ShowQuickFixes -> showQuickFixes(event.issue)
+            is EditorEvent.ApplyQuickFix -> applyQuickFix(event.quickFix)
         }
     }
 
@@ -93,6 +115,8 @@ class EditorViewModel(
     }
 
     private fun updateContent(content: String) {
+        val activeTab = currentState.activeTab ?: return
+
         updateState {
             copy(
                 tabs =
@@ -106,6 +130,7 @@ class EditorViewModel(
                                 isModified = true,
                                 undoStack = newUndoStack,
                                 redoStack = emptyList(), // Clear redo stack on new change
+                                isValidating = true, // Mark as validating
                             )
                         } else {
                             tab
@@ -113,6 +138,122 @@ class EditorViewModel(
                     },
             )
         }
+
+        // Submit for live validation
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, content)
+        }
+    }
+
+    private fun handleValidationCompleted(
+        tabId: String,
+        issues: List<su.kidoz.feature.parser.validation.ValidationIssue>,
+    ) {
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == tabId) {
+                            tab.copy(
+                                validationIssues = issues,
+                                isValidating = false,
+                            )
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+    }
+
+    private fun navigateToIssue(issue: su.kidoz.feature.parser.validation.ValidationIssue) {
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTabId) {
+                            tab.copy(
+                                cursorPosition = issue.position.start,
+                                selectionStart = issue.position.start,
+                                selectionEnd = issue.position.end,
+                                selectedIssue = issue,
+                            )
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+        sendEffect(EditorEffect.ShowMessage("Navigated to: ${issue.message}"))
+    }
+
+    private fun selectIssue(issue: su.kidoz.feature.parser.validation.ValidationIssue?) {
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTabId) {
+                            tab.copy(selectedIssue = issue)
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+    }
+
+    private fun showQuickFixes(issue: su.kidoz.feature.parser.validation.ValidationIssue) {
+        val activeTab = currentState.activeTab ?: return
+        val fixes =
+            quickFixProvider.getQuickFixes(
+                issue = issue,
+                content = activeTab.content,
+                availableColumns = emptyList(), // TODO: Get from autocomplete cache
+                availableTables = emptyList(), // TODO: Get from autocomplete cache
+            )
+
+        if (fixes.isEmpty()) {
+            sendEffect(EditorEffect.ShowMessage("No quick-fixes available for this issue"))
+        } else {
+            sendEffect(EditorEffect.QuickFixesAvailable(issue, fixes))
+        }
+    }
+
+    private fun applyQuickFix(quickFix: QuickFix) {
+        val activeTab = currentState.activeTab ?: return
+        val (newContent, newCursorPosition) = quickFix.apply(activeTab.content)
+
+        // Save current state to undo stack
+        val snapshot = EditorSnapshot(activeTab.content, activeTab.cursorPosition)
+        val newUndoStack = (activeTab.undoStack + snapshot).takeLast(EditorTab.MAX_UNDO_STACK_SIZE)
+
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTabId) {
+                            tab.copy(
+                                content = newContent,
+                                cursorPosition = newCursorPosition,
+                                isModified = true,
+                                undoStack = newUndoStack,
+                                redoStack = emptyList(),
+                                selectedIssue = null,
+                                isValidating = true,
+                            )
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+
+        // Re-validate after applying fix
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, newContent)
+        }
+
+        sendEffect(EditorEffect.ShowMessage("Applied: ${quickFix.title}"))
     }
 
     private fun undo() {
@@ -132,12 +273,18 @@ class EditorViewModel(
                                 cursorPosition = snapshot.cursorPosition,
                                 undoStack = tab.undoStack.dropLast(1),
                                 redoStack = tab.redoStack + currentSnapshot,
+                                isValidating = true,
                             )
                         } else {
                             tab
                         }
                     },
             )
+        }
+
+        // Re-validate after undo
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, snapshot.content)
         }
     }
 
@@ -158,12 +305,18 @@ class EditorViewModel(
                                 cursorPosition = snapshot.cursorPosition,
                                 undoStack = tab.undoStack + currentSnapshot,
                                 redoStack = tab.redoStack.dropLast(1),
+                                isValidating = true,
                             )
                         } else {
                             tab
                         }
                     },
             )
+        }
+
+        // Re-validate after redo
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, snapshot.content)
         }
     }
 
@@ -219,12 +372,18 @@ class EditorViewModel(
                                 content = newContent,
                                 cursorPosition = newPosition,
                                 isModified = true,
+                                isValidating = true,
                             )
                         } else {
                             tab
                         }
                     },
             )
+        }
+
+        // Re-validate after insert
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, newContent)
         }
     }
 
@@ -428,12 +587,17 @@ class EditorViewModel(
                 tabs =
                     tabs.map { tab ->
                         if (tab.id == activeTabId) {
-                            tab.copy(content = formatted, isModified = true)
+                            tab.copy(content = formatted, isModified = true, isValidating = true)
                         } else {
                             tab
                         }
                     },
             )
+        }
+
+        // Re-validate after format
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, formatted)
         }
     }
 
@@ -494,12 +658,17 @@ class EditorViewModel(
                 tabs =
                     tabs.map { tab ->
                         if (tab.id == activeTabId) {
-                            tab.copy(content = newContent, isModified = true)
+                            tab.copy(content = newContent, isModified = true, isValidating = true)
                         } else {
                             tab
                         }
                     },
             )
+        }
+
+        // Re-validate after find/replace
+        viewModelScope.launch {
+            liveValidator.submitForValidation(activeTab.id, newContent)
         }
     }
 }
