@@ -1,5 +1,6 @@
 package su.kidoz.feature.editor.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,7 +35,8 @@ fun EditorTabs(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             state.tabs.forEach { tab ->
@@ -63,7 +66,7 @@ fun EditorTabs(
             if (onSaveQuery != null) {
                 Spacer(Modifier.weight(1f))
                 TooltipBox(
-                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                     tooltip = { PlainTooltip { Text("Save current query") } },
                     state = rememberTooltipState(),
                 ) {
@@ -99,26 +102,41 @@ private fun TabItem(
     onClose: () -> Unit,
     canClose: Boolean,
 ) {
-    Surface(
-        color =
+    val containerColor by animateColorAsState(
+        targetValue =
             if (isActive) {
                 MaterialTheme.colorScheme.surface
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
             },
+        label = "editorTabContainer",
+    )
+    val textColor by animateColorAsState(
+        targetValue =
+            if (isActive) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        label = "editorTabText",
+    )
+    Surface(
+        color = containerColor,
+        shape = MaterialTheme.shapes.small,
         modifier =
             Modifier
                 .clickable(onClick = onClick)
-                .padding(horizontal = 1.dp),
+                .padding(horizontal = 4.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = if (isModified) "$title *" else title,
                 style = MaterialTheme.typography.bodySmall,
+                color = textColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

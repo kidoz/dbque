@@ -1,13 +1,13 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    kotlin("jvm") version "2.1.0"
-    kotlin("plugin.serialization") version "2.1.0"
-    id("org.jetbrains.compose") version "1.7.3"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
-    id("app.cash.sqldelight") version "2.0.1"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.sqldelight)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 group = "su.kidoz"
@@ -26,54 +26,60 @@ dependencies {
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
 
-    // Koin - Dependency Injection
-    implementation("io.insert-koin:koin-core:3.5.6")
-    implementation("io.insert-koin:koin-compose:1.1.5")
+    // Koin - Dependency Injection (using BOM)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.core)
+    implementation(libs.koin.compose)
 
     // Ktor - HTTP Client
-    implementation("io.ktor:ktor-client-core:2.3.12")
-    implementation("io.ktor:ktor-client-cio:2.3.12")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
 
     // SQLDelight - Local Storage
-    implementation("app.cash.sqldelight:sqlite-driver:2.0.1")
-    implementation("app.cash.sqldelight:coroutines-extensions:2.0.1")
+    implementation(libs.sqldelight.sqlite.driver)
+    implementation(libs.sqldelight.coroutines)
 
     // kotlinx.serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation(libs.kotlinx.serialization.json)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.swing)
 
     // Logging
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
-    implementation("ch.qos.logback:logback-classic:1.5.6")
+    implementation(libs.kotlin.logging)
+    implementation(libs.logback.classic)
 
     // JDBC Drivers
-    implementation("org.postgresql:postgresql:42.7.3")
-    implementation("com.mysql:mysql-connector-j:8.4.0")
-    implementation("org.xerial:sqlite-jdbc:3.46.0.0")
-    implementation("com.h2database:h2:2.2.224")
+    implementation(libs.postgresql)
+    implementation(libs.mysql.connector)
+    implementation(libs.sqlite.jdbc)
+    implementation(libs.h2)
 
     // MongoDB Driver
-    implementation("org.mongodb:mongodb-driver-kotlin-coroutine:5.1.0")
-    implementation("org.mongodb:bson-kotlin:5.1.0")
+    implementation(libs.mongodb.driver.kotlin)
+    implementation(libs.bson.kotlin)
 
     // Elasticsearch Client
-    implementation("co.elastic.clients:elasticsearch-java:8.15.0")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+    implementation(libs.elasticsearch.java)
+    implementation(libs.jackson.databind)
 
     // Connection Pool
-    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation(libs.hikaricp)
 
     // Parser Combinator Library
-    implementation("com.github.h0tk3y.betterParse:better-parse:0.4.4")
+    implementation(libs.better.parse)
+
+    // SSH Tunnel Support
+    implementation(libs.jsch)
 
     // Testing
     testImplementation(kotlin("test"))
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
 }
 
 kotlin {
@@ -95,6 +101,11 @@ sqldelight {
 compose.desktop {
     application {
         mainClass = "su.kidoz.AppKt"
+
+        jvmArgs +=
+            listOf(
+                "-Xdock:name=DBQue",
+            )
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
@@ -125,7 +136,7 @@ tasks.test {
 }
 
 ktlint {
-    version.set("1.5.0")
+    version.set(libs.versions.ktlint.lib)
     filter {
         include("**/src/**")
     }
@@ -133,5 +144,5 @@ ktlint {
 
 detekt {
     buildUponDefaultConfig = true
-    config.setFrom("$projectDir/detekt.yml")
+    config.setFrom("$projectDir/config/detekt/detekt.yml")
 }

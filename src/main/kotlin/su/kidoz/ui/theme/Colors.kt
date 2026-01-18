@@ -3,32 +3,32 @@ package su.kidoz.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Primary colors
-val Primary = Color(0xFF2196F3)
-val PrimaryVariant = Color(0xFF1976D2)
-val OnPrimary = Color.White
+val Primary = Color(0xFF335CFF)
+val PrimaryVariant = Color(0xFF2543C7)
+val OnPrimary = Color(0xFFFDFDFF)
 
 // Secondary colors
-val Secondary = Color(0xFF03DAC6)
-val SecondaryVariant = Color(0xFF018786)
-val OnSecondary = Color.Black
+val Secondary = Color(0xFF1AA88E)
+val SecondaryVariant = Color(0xFF0D7C69)
+val OnSecondary = Color(0xFFFFFFFF)
 
 // Background colors - Light theme
-val BackgroundLight = Color(0xFFFAFAFA)
-val SurfaceLight = Color.White
-val OnBackgroundLight = Color(0xFF1C1B1F)
-val OnSurfaceLight = Color(0xFF1C1B1F)
+val BackgroundLight = Color(0xFFF6F5F2)
+val SurfaceLight = Color(0xFFFDFCFB)
+val OnBackgroundLight = Color(0xFF1B1B1B)
+val OnSurfaceLight = Color(0xFF1B1B1B)
 
 // Background colors - Dark theme
-val BackgroundDark = Color(0xFF121212)
-val SurfaceDark = Color(0xFF1E1E1E)
-val OnBackgroundDark = Color(0xFFE6E1E5)
-val OnSurfaceDark = Color(0xFFE6E1E5)
+val BackgroundDark = Color(0xFF141414)
+val SurfaceDark = Color(0xFF1C1C1C)
+val OnBackgroundDark = Color(0xFFE7E5E1)
+val OnSurfaceDark = Color(0xFFE7E5E1)
 
 // Editor colors - Dark theme
-val EditorBackground = Color(0xFF1E1E1E)
-val EditorLineNumber = Color(0xFF858585)
-val EditorSelection = Color(0xFF264F78)
-val EditorCurrentLine = Color(0xFF2D2D2D)
+val EditorBackground = Color(0xFF101318)
+val EditorLineNumber = Color(0xFF697184)
+val EditorSelection = Color(0xFF1B365D)
+val EditorCurrentLine = Color(0xFF1C2028)
 
 // Syntax highlighting colors
 val SyntaxKeyword = Color(0xFF569CD6)
@@ -41,18 +41,18 @@ val SyntaxOperator = Color(0xFFD4D4D4)
 val SyntaxVariable = Color(0xFF9CDCFE)
 
 // Status colors
-val Success = Color(0xFF4CAF50)
-val Warning = Color(0xFFFF9800)
-val Error = Color(0xFFF44336)
-val Info = Color(0xFF2196F3)
+val Success = Color(0xFF2FBF71)
+val Warning = Color(0xFFF5A524)
+val Error = Color(0xFFEF4E4E)
+val Info = Color(0xFF3D7BFF)
 
 // Tree colors
-val TreeFolder = Color(0xFFDCB67A)
-val TreeTable = Color(0xFF4EC9B0)
-val TreeColumn = Color(0xFF9CDCFE)
-val TreeIndex = Color(0xFFDCDCAA)
-val TreeView = Color(0xFFCE9178)
+val TreeFolder = Color(0xFFF2B86B)
+val TreeTable = Color(0xFF42C0B6)
+val TreeColumn = Color(0xFF8BD5FF)
+val TreeIndex = Color(0xFFFFD479)
+val TreeView = Color(0xFFF2A766)
 
 // Border colors
-val BorderLight = Color(0xFFE0E0E0)
-val BorderDark = Color(0xFF404040)
+val BorderLight = Color(0xFFD6D2CB)
+val BorderDark = Color(0xFF3A3834)

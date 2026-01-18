@@ -2,6 +2,7 @@ package su.kidoz.feature.connection
 
 import su.kidoz.core.model.ConnectionConfig
 import su.kidoz.core.model.DatabaseType
+import su.kidoz.core.model.SshConfig
 import su.kidoz.mvi.UiState
 
 data class ConnectionState(
@@ -26,6 +27,15 @@ data class ConnectionDialogState(
     // MongoDB-specific fields
     val authSource: String = "",
     val useSsl: Boolean = false,
+    // SSH Tunnel fields
+    val sshEnabled: Boolean = false,
+    val sshHost: String = "",
+    val sshPort: String = "22",
+    val sshUsername: String = "",
+    val sshPassword: String = "",
+    val sshPrivateKeyPath: String = "",
+    val sshPassphrase: String = "",
+    val sshUseKeyAuth: Boolean = false,
     val isTesting: Boolean = false,
     val testResult: TestResult? = null,
     val error: String? = null,
@@ -33,12 +43,22 @@ data class ConnectionDialogState(
     val isValid: Boolean
         get() =
             name.isNotBlank() &&
+                isSshValid &&
                 when (type) {
                     DatabaseType.SQLITE, DatabaseType.H2 -> path.isNotBlank()
                     DatabaseType.MONGODB -> host.isNotBlank() // MongoDB database is optional
                     DatabaseType.ELASTICSEARCH -> host.isNotBlank() // Elasticsearch only needs host
                     else -> host.isNotBlank() && database.isNotBlank()
                 }
+
+    val isSshValid: Boolean
+        get() =
+            !sshEnabled ||
+                (
+                    sshHost.isNotBlank() &&
+                        sshUsername.isNotBlank() &&
+                        (sshUseKeyAuth && sshPrivateKeyPath.isNotBlank() || !sshUseKeyAuth && sshPassword.isNotBlank())
+                )
 
     fun toConnectionConfig(): ConnectionConfig {
         // Build properties map for database-specific options
@@ -57,6 +77,18 @@ data class ConnectionDialogState(
             }
         }
 
+        val sshConfig =
+            SshConfig(
+                enabled = sshEnabled,
+                host = sshHost,
+                port = sshPort.toIntOrNull() ?: 22,
+                username = sshUsername,
+                password = sshPassword,
+                privateKeyPath = sshPrivateKeyPath,
+                passphrase = sshPassphrase,
+                useKeyAuth = sshUseKeyAuth,
+            )
+
         return ConnectionConfig(
             id =
                 connectionId ?: java.util.UUID
@@ -71,6 +103,7 @@ data class ConnectionDialogState(
             password = password,
             path = path,
             properties = properties,
+            sshConfig = sshConfig,
         )
     }
 }

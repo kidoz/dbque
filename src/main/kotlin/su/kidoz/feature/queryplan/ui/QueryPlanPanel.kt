@@ -247,17 +247,12 @@ private fun PlanNodeItem(
                     }
                 }
 
-                // Cost bar
+                // Cost bar with gradient heat map
                 if (costRatio > 0) {
                     LinearProgressIndicator(
                         progress = { costRatio.toFloat() },
                         modifier = Modifier.fillMaxWidth().height(4.dp).padding(top = 4.dp),
-                        color =
-                            if (costRatio > 0.5) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
+                        color = getCostGradientColor(costRatio.toFloat()),
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
                 }
@@ -466,3 +461,18 @@ private fun getNodeColor(
         else -> MaterialTheme.colorScheme.primary
     }
 }
+
+/**
+ * Get a gradient color based on cost ratio for heat map visualization.
+ * - Green (0-25%): Low cost, optimal performance
+ * - Yellow (25-50%): Moderate cost, acceptable performance
+ * - Orange (50-75%): High cost, may need optimization
+ * - Red (75-100%): Critical cost, requires attention
+ */
+private fun getCostGradientColor(costRatio: Float): Color =
+    when {
+        costRatio < 0.25f -> Color(0xFF4CAF50) // Green
+        costRatio < 0.50f -> Color(0xFFFFEB3B) // Yellow
+        costRatio < 0.75f -> Color(0xFFFF9800) // Orange
+        else -> Color(0xFFF44336) // Red
+    }

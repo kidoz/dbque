@@ -7,9 +7,9 @@ import co.elastic.clients.elasticsearch.indices.GetMappingResponse
 import co.elastic.clients.json.jackson.JacksonJsonpMapper
 import co.elastic.clients.transport.rest_client.RestClientTransport
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -651,7 +651,21 @@ class ElasticsearchDriver : DatabaseDriver {
                 }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to get index mapping for $indexName" }
-                generateCreateTableDdl(connection as Connection, indexName, null, null)
+                // Return a template since we can't get the actual mapping
+                """
+                PUT /$indexName
+                {
+                  "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 0
+                  },
+                  "mappings": {
+                    "properties": {
+                      // Define your fields here
+                    }
+                  }
+                }
+                """.trimIndent()
             }
         }
 

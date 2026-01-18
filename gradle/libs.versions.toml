@@ -1,0 +1,107 @@
+[versions]
+# Kotlin & Compose
+kotlin = "2.3.0"
+compose-multiplatform = "1.10.0"
+
+# Dependency Injection
+koin-bom = "4.1.1"
+
+# Networking
+ktor = "3.1.1"
+
+# Database
+sqldelight = "2.2.1"
+postgresql = "42.7.5"
+mysql = "9.2.0"
+sqlite-jdbc = "3.49.1.0"
+h2 = "2.3.232"
+mongodb = "5.3.1"
+elasticsearch = "8.17.2"
+hikaricp = "6.2.1"
+
+# Serialization & Parsing
+kotlinx-serialization = "1.8.0"
+kotlinx-coroutines = "1.10.2"
+better-parse = "0.4.4"
+jackson = "2.18.3"
+
+# Logging
+kotlin-logging = "7.0.4"
+logback = "1.5.17"
+
+# SSH
+jsch = "0.1.55"
+
+# Testing
+mockk = "1.13.13"
+turbine = "1.2.0"
+
+# Code Quality
+ktlint = "12.1.2"
+ktlint-lib = "1.5.0"
+detekt = "1.23.8"
+
+# Build Tools
+foojay = "0.9.0"
+
+[libraries]
+# Koin BOM and modules
+koin-bom = { module = "io.insert-koin:koin-bom", version.ref = "koin-bom" }
+koin-core = { module = "io.insert-koin:koin-core" }
+koin-compose = { module = "io.insert-koin:koin-compose" }
+
+# Ktor Client
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+
+# SQLDelight
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+
+# Kotlinx
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+
+# Logging
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+
+# JDBC Drivers
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+mysql-connector = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+
+# MongoDB
+mongodb-driver-kotlin = { module = "org.mongodb:mongodb-driver-kotlin-coroutine", version.ref = "mongodb" }
+bson-kotlin = { module = "org.mongodb:bson-kotlin", version.ref = "mongodb" }
+
+# Elasticsearch
+elasticsearch-java = { module = "co.elastic.clients:elasticsearch-java", version.ref = "elasticsearch" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+
+# Connection Pool
+hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
+
+# Parser
+better-parse = { module = "com.github.h0tk3y.betterParse:better-parse", version.ref = "better-parse" }
+
+# SSH
+jsch = { module = "com.jcraft:jsch", version.ref = "jsch" }
+
+# Testing
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

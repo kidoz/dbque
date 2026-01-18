@@ -1,0 +1,74 @@
+build:
+  maxIssues: 0
+
+style:
+  UnusedImports:
+    active: true
+  UnusedPrivateMember:
+    active: true
+    allowedNames: "(_|ignored|expected|serialVersionUID)"
+  UnusedPrivateClass:
+    active: true
+  UnusedParameter:
+    active: true
+    allowedNames: "ignored|expected"
+  WildcardImport:
+    active: false
+  MaxLineLength:
+    active: false
+  MagicNumber:
+    active: false
+  UseCheckOrError:
+    active: false
+  ReturnCount:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+  ForbiddenComment:
+    active: false
+  NewLineAtEndOfFile:
+    active: false
+  TrailingWhitespace:
+    active: false
+  NoTabs:
+    active: false
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated:
+      - Composable
+  MatchingDeclarationName:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  TooGenericExceptionThrown:
+    active: false
+  SwallowedException:
+    active: false
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: false
+
+complexity:
+  NestedBlockDepth:
+    active: false
+  LongMethod:
+    active: false
+  LongParameterList:
+    active: false
+  TooManyFunctions:
+    active: false
+  ComplexCondition:
+    active: false
+  CyclomaticComplexMethod:
+    active: false
+  LabeledExpression:
+    active: false
+  LargeClass:
+    active: false
+
+potential-bugs:
+  UnreachableCode:
+    active: true

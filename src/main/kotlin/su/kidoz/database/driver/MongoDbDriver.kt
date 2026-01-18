@@ -3,11 +3,11 @@ package su.kidoz.database.driver
 import com.mongodb.ConnectionString
 import com.mongodb.MongoClientSettings
 import com.mongodb.kotlin.client.coroutine.MongoClient
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
 import org.bson.Document
 import su.kidoz.core.model.*
 import su.kidoz.database.MongoDatabaseConnection
@@ -599,7 +599,7 @@ class MongoDbDriver : DatabaseDriver {
 
                 val additionalMetrics = mutableMapOf<String, Any>()
                 status.getString("host")?.let { additionalMetrics["host"] = it }
-                status.getString("storageEngine")?.let {
+                status.get("storageEngine")?.let {
                     (it as? Document)?.getString("name")?.let { name -> additionalMetrics["storageEngine"] = name }
                 }
                 repl?.getString("setName")?.let { additionalMetrics["replicaSet"] = it }

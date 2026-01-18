@@ -18,4 +18,14 @@ sealed interface ResultsEffect : UiEffect {
     data class ShowMessage(
         val message: String,
     ) : ResultsEffect
+
+    data class ChangesSaved(
+        val rowsAffected: Int,
+    ) : ResultsEffect
+
+    data class RowsDeleted(
+        val rowCount: Int,
+    ) : ResultsEffect
+
+    data object RefreshData : ResultsEffect
 }

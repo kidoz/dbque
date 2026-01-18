@@ -306,7 +306,7 @@ private fun SavedQueryDialog(
                         onValueChange = { onEvent(SavedQueryEvent.UpdateFolder(it)) },
                         label = { Text("Folder (optional)") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = folderExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                     )
                     if (folders.isNotEmpty()) {
                         ExposedDropdownMenu(

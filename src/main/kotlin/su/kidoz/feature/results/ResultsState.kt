@@ -1,6 +1,7 @@
 package su.kidoz.feature.results
 
 import su.kidoz.core.model.QueryResult
+import su.kidoz.feature.results.ui.EditingCell
 import su.kidoz.mvi.UiState
 
 data class ResultsState(
@@ -13,7 +14,18 @@ data class ResultsState(
     val selectedColumn: Int? = null,
     val isExporting: Boolean = false,
     val exportDialogVisible: Boolean = false,
+    // Edit mode state
+    val isEditMode: Boolean = false,
+    val editingCell: EditingCell? = null,
+    val pendingEdits: Map<Pair<Int, Int>, CellEdit> = emptyMap(),
+    val isSaving: Boolean = false,
+    val deleteConfirmationVisible: Boolean = false,
+    val tableName: String? = null,
+    val schemaName: String? = null,
+    val primaryKeyColumns: List<Int> = emptyList(),
 ) : UiState {
+    val hasPendingChanges: Boolean
+        get() = pendingEdits.isNotEmpty()
     val activeResult: QueryResult?
         get() = results.getOrNull(activeResultIndex)
 

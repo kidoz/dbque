@@ -18,20 +18,21 @@ fun StatusBar(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Left side - connection status
             Text(
                 text = connectionStatus ?: "Not connected",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
@@ -39,7 +40,7 @@ fun StatusBar(
             queryStatus?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -48,7 +49,7 @@ fun StatusBar(
             cursorPosition?.let {
                 Text(
                     text = it,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

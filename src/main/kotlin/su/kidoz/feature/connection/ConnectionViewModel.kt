@@ -51,6 +51,14 @@ class ConnectionViewModel(
             is ConnectionEvent.UpdatePath -> updateDialogField { copy(path = event.path) }
             is ConnectionEvent.UpdateAuthSource -> updateDialogField { copy(authSource = event.authSource) }
             is ConnectionEvent.UpdateUseSsl -> updateDialogField { copy(useSsl = event.useSsl) }
+            is ConnectionEvent.UpdateSshEnabled -> updateDialogField { copy(sshEnabled = event.enabled) }
+            is ConnectionEvent.UpdateSshHost -> updateDialogField { copy(sshHost = event.host) }
+            is ConnectionEvent.UpdateSshPort -> updateDialogField { copy(sshPort = event.port) }
+            is ConnectionEvent.UpdateSshUsername -> updateDialogField { copy(sshUsername = event.username) }
+            is ConnectionEvent.UpdateSshPassword -> updateDialogField { copy(sshPassword = event.password) }
+            is ConnectionEvent.UpdateSshPrivateKeyPath -> updateDialogField { copy(sshPrivateKeyPath = event.path) }
+            is ConnectionEvent.UpdateSshPassphrase -> updateDialogField { copy(sshPassphrase = event.passphrase) }
+            is ConnectionEvent.UpdateSshUseKeyAuth -> updateDialogField { copy(sshUseKeyAuth = event.useKeyAuth) }
             is ConnectionEvent.TestConnection -> testConnection()
             is ConnectionEvent.SaveConnection -> saveConnection()
             is ConnectionEvent.DeleteConnection -> deleteConnection(event.connectionId)
@@ -85,6 +93,14 @@ class ConnectionViewModel(
                         path = connection.path,
                         authSource = connection.properties["authSource"] ?: "",
                         useSsl = connection.properties["ssl"] == "true",
+                        sshEnabled = connection.sshConfig.enabled,
+                        sshHost = connection.sshConfig.host,
+                        sshPort = connection.sshConfig.port.toString(),
+                        sshUsername = connection.sshConfig.username,
+                        sshPassword = connection.sshConfig.password,
+                        sshPrivateKeyPath = connection.sshConfig.privateKeyPath,
+                        sshPassphrase = connection.sshConfig.passphrase,
+                        sshUseKeyAuth = connection.sshConfig.useKeyAuth,
                     ),
             )
         }
@@ -211,6 +227,14 @@ class ConnectionViewModel(
                         path = connection.path,
                         authSource = connection.properties["authSource"] ?: "",
                         useSsl = connection.properties["ssl"] == "true",
+                        sshEnabled = connection.sshConfig.enabled,
+                        sshHost = connection.sshConfig.host,
+                        sshPort = connection.sshConfig.port.toString(),
+                        sshUsername = connection.sshConfig.username,
+                        sshPassword = connection.sshConfig.password,
+                        sshPrivateKeyPath = connection.sshConfig.privateKeyPath,
+                        sshPassphrase = connection.sshConfig.passphrase,
+                        sshUseKeyAuth = connection.sshConfig.useKeyAuth,
                     ),
             )
         }

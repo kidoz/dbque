@@ -148,7 +148,7 @@ class SqlValidator(
 
         // Check for missing WHERE clause in subqueries
         if (select.where == null && select.from != null) {
-            val tableName = (select.from?.source as? TableName)?.name?.fullName
+            val tableName = (select.from.source as? TableName)?.name?.fullName
             if (tableName != null && tableName.lowercase() !in setOf("dual", "generate_series")) {
                 issues.add(
                     ValidationIssue(
@@ -709,7 +709,7 @@ class MongoValidator(
             }
             is GroupStage -> {
                 // Validate _id field
-                if (stage.id is MongoScalar && (stage.id as MongoScalar).value == null) {
+                if (stage.id is MongoScalar && stage.id.value == null) {
                     issues.add(
                         ValidationIssue(
                             message = "\$group with _id: null groups all documents into one",
@@ -820,7 +820,6 @@ class MongoValidator(
             is SampleStage -> "\$sample"
             is RedactStage -> "\$redact"
             is GenericStage -> stage.name
-            else -> null
         }
 
     private fun validateUpdate(
@@ -832,7 +831,7 @@ class MongoValidator(
 
         // Check update operators in the update document
         if (update.update is MongoObject) {
-            val updateObj = update.update as MongoObject
+            val updateObj = update.update
             val hasOperators = updateObj.fields.keys.any { it.startsWith("\$") }
             val hasFields = updateObj.fields.keys.any { !it.startsWith("\$") }
 
@@ -913,7 +912,7 @@ class MongoValidator(
 
         // Check for empty filter (will delete all documents)
         if (delete.filter is MongoFieldFilter) {
-            val filter = delete.filter as MongoFieldFilter
+            val filter = delete.filter
             if (filter.field == "_id" && filter.operator == MongoOperator.EXISTS) {
                 // This is the default "match all" filter
                 if (delete.operationType == MongoOperationType.DELETE_MANY) {

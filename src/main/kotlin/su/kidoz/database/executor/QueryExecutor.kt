@@ -1,8 +1,8 @@
 package su.kidoz.database.executor
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
 import su.kidoz.core.model.QueryExecution
 import su.kidoz.core.model.QueryExecutionResult
 import su.kidoz.core.model.QueryResult

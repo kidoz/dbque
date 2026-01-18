@@ -168,7 +168,7 @@ fun EditableDataGrid(
                             value = value,
                             editedValue = editedCells[cellKey]?.newValue,
                             isEditing = isEditing,
-                            editingValue = if (isEditing) editingCell?.currentValue ?: "" else "",
+                            editingValue = if (isEditing) editingCell.currentValue else "",
                             hasEdit = hasEdit,
                             isSelected = selectedColumn == colIndex,
                             onStartEdit = { onStartEdit(rowIndex, colIndex, value) },

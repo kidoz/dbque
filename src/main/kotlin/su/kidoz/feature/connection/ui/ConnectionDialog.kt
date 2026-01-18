@@ -54,7 +54,7 @@ fun ConnectionDialog(
                         readOnly = true,
                         label = { Text("Database Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                     )
                     ExposedDropdownMenu(
                         expanded = typeExpanded,
@@ -291,6 +291,12 @@ fun ConnectionDialog(
                             )
                         }
                     }
+                }
+
+                // SSH Tunnel Configuration (for remote database connections)
+                if (state.type != DatabaseType.SQLITE && state.type != DatabaseType.H2) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    SshConfigSection(state = state, onEvent = onEvent)
                 }
 
                 // Test Result

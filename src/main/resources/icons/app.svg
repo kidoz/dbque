@@ -1,0 +1,32 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F6F5F2"/>
+      <stop offset="1" stop-color="#EDE9E3"/>
+    </linearGradient>
+    <linearGradient id="cyl" x1="362" y1="280" x2="662" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#335CFF"/>
+      <stop offset="1" stop-color="#2543C7"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="512" y1="260" x2="512" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8BD5FF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#8BD5FF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="64" y="64" width="896" height="896" rx="180" fill="url(#bg)"/>
+  <rect x="104" y="104" width="816" height="816" rx="150" stroke="#D6D2CB" stroke-width="6"/>
+
+  <g>
+    <ellipse cx="512" cy="312" rx="190" ry="78" fill="#3D7BFF"/>
+    <rect x="322" y="312" width="380" height="392" fill="url(#cyl)"/>
+    <ellipse cx="512" cy="704" rx="190" ry="78" fill="#2543C7"/>
+    <ellipse cx="512" cy="312" rx="170" ry="62" fill="#5C7CFF" opacity="0.9"/>
+    <rect x="342" y="342" width="340" height="312" rx="42" fill="url(#glow)"/>
+  </g>
+
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 256 360 L 192 512 L 256 664" stroke="#1AA88E" stroke-width="52"/>
+    <path d="M 768 360 L 832 512 L 768 664" stroke="#F2B863" stroke-width="52"/>
+  </g>
+</svg>

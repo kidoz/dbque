@@ -1,7 +1,7 @@
 package su.kidoz.feature.queryplan
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.*
-import mu.KotlinLogging
 import java.util.UUID
 
 class QueryPlanParser {

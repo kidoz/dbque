@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS connections (
     password TEXT NOT NULL DEFAULT '',
     path TEXT NOT NULL DEFAULT '',
     properties TEXT NOT NULL DEFAULT '{}',
+    ssh_config TEXT NOT NULL DEFAULT '{}',
     color TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -61,8 +62,8 @@ getConnectionById:
 SELECT * FROM connections WHERE id = ?;
 
 insertConnection:
-INSERT OR REPLACE INTO connections(id, name, type, host, port, database_name, username, password, path, properties, color, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO connections(id, name, type, host, port, database_name, username, password, path, properties, ssh_config, color, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateConnection:
 UPDATE connections SET
@@ -75,6 +76,7 @@ UPDATE connections SET
     password = ?,
     path = ?,
     properties = ?,
+    ssh_config = ?,
     color = ?,
     updated_at = ?
 WHERE id = ?;

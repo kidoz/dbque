@@ -4,6 +4,18 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
+data class SshConfig(
+    val enabled: Boolean = false,
+    val host: String = "",
+    val port: Int = 22,
+    val username: String = "",
+    val password: String = "",
+    val privateKeyPath: String = "",
+    val passphrase: String = "",
+    val useKeyAuth: Boolean = false,
+)
+
+@Serializable
 data class ConnectionConfig(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -16,6 +28,7 @@ data class ConnectionConfig(
     val path: String = "",
     val properties: Map<String, String> = emptyMap(),
     val color: String? = null,
+    val sshConfig: SshConfig = SshConfig(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {

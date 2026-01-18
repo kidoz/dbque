@@ -124,11 +124,11 @@ fun ElasticsearchIndexDialog(
                     Text(
                         text =
                             when (state.mode) {
+                                IndexDialogMode.CREATE -> ""
                                 IndexDialogMode.EDIT_SETTINGS ->
                                     "Note: Only dynamic settings (replicas, refresh_interval, etc.) can be modified."
                                 IndexDialogMode.EDIT_MAPPINGS ->
                                     "Note: You can add new fields but cannot modify existing field types."
-                                else -> ""
                             },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

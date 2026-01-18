@@ -1,8 +1,8 @@
 package su.kidoz.database.driver
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
 import su.kidoz.core.model.*
 import su.kidoz.database.capabilities.*
 import java.sql.Connection

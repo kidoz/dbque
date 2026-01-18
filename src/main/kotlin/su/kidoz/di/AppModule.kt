@@ -19,6 +19,7 @@ import su.kidoz.feature.results.DataEditor
 import su.kidoz.feature.results.ResultsViewModel
 import su.kidoz.feature.savedqueries.SavedQueryRepository
 import su.kidoz.feature.savedqueries.SavedQueryViewModel
+import su.kidoz.feature.settings.SettingsViewModel
 import su.kidoz.storage.AppDatabase
 import java.io.File
 
@@ -39,9 +40,9 @@ val appModule =
         singleOf(::SavedQueryRepository)
 
         // Database services
-        singleOf(::ConnectionManager)
-        singleOf(::QueryExecutor)
         singleOf(::SshTunnelManager)
+        single { ConnectionManager(get()) }
+        singleOf(::QueryExecutor)
         singleOf(::DataEditor)
 
         // Autocomplete
@@ -51,10 +52,11 @@ val appModule =
         single { ConnectionViewModel(get(), get()) }
         single { ExplorerViewModel(get()) }
         single { EditorViewModel(get(), get(), get()) }
-        single { ResultsViewModel() }
+        single { ResultsViewModel(get()) }
         single { HistoryViewModel(get(), get()) }
         single { QueryPlanViewModel(get()) }
         single { SavedQueryViewModel(get(), get()) }
+        single { SettingsViewModel(get()) }
     }
 
 private fun getAppDataPath(): String {

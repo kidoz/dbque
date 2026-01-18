@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import su.kidoz.core.model.ConnectionConfig
 import su.kidoz.core.model.DatabaseType
+import su.kidoz.core.model.SshConfig
 import su.kidoz.storage.AppDatabase
 
 class ConnectionRepository(
@@ -48,6 +49,7 @@ class ConnectionRepository(
                         kotlinx.serialization.serializer<Map<String, String>>(),
                         config.properties,
                     ),
+                ssh_config = json.encodeToString(SshConfig.serializer(), config.sshConfig),
                 color = config.color,
                 created_at = config.createdAt,
                 updated_at = System.currentTimeMillis(),
@@ -75,6 +77,12 @@ class ConnectionRepository(
                     json.decodeFromString<Map<String, String>>(properties)
                 } catch (e: Exception) {
                     emptyMap()
+                },
+            sshConfig =
+                try {
+                    json.decodeFromString(SshConfig.serializer(), ssh_config)
+                } catch (e: Exception) {
+                    SshConfig()
                 },
             color = color,
             createdAt = created_at,

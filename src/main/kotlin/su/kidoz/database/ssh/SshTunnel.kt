@@ -1,22 +1,12 @@
 package su.kidoz.database.ssh
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
+import su.kidoz.core.model.SshConfig
 import java.io.Closeable
 import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
-
-data class SshConfig(
-    val enabled: Boolean = false,
-    val host: String = "",
-    val port: Int = 22,
-    val username: String = "",
-    val password: String = "",
-    val privateKeyPath: String = "",
-    val passphrase: String = "",
-    val useKeyAuth: Boolean = false,
-)
 
 data class TunnelConfig(
     val sshConfig: SshConfig,

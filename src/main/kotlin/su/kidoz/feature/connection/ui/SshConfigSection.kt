@@ -12,13 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import su.kidoz.database.ssh.SshConfig
+import su.kidoz.feature.connection.ConnectionDialogState
+import su.kidoz.feature.connection.ConnectionEvent
 import javax.swing.JFileChooser
 
 @Composable
 fun SshConfigSection(
-    sshConfig: SshConfig,
-    onConfigChange: (SshConfig) -> Unit,
+    state: ConnectionDialogState,
+    onEvent: (ConnectionEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showPassword by remember { mutableStateOf(false) }
@@ -34,31 +35,28 @@ fun SshConfigSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Checkbox(
-                checked = sshConfig.enabled,
-                onCheckedChange = { onConfigChange(sshConfig.copy(enabled = it)) },
+                checked = state.sshEnabled,
+                onCheckedChange = { onEvent(ConnectionEvent.UpdateSshEnabled(it)) },
             )
             Text("Use SSH Tunnel", style = MaterialTheme.typography.bodyMedium)
         }
 
-        if (sshConfig.enabled) {
+        if (state.sshEnabled) {
             // SSH Host and Port
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedTextField(
-                    value = sshConfig.host,
-                    onValueChange = { onConfigChange(sshConfig.copy(host = it)) },
+                    value = state.sshHost,
+                    onValueChange = { onEvent(ConnectionEvent.UpdateSshHost(it)) },
                     label = { Text("SSH Host") },
                     modifier = Modifier.weight(2f),
                     singleLine = true,
                 )
                 OutlinedTextField(
-                    value = sshConfig.port.toString(),
-                    onValueChange = {
-                        val port = it.filter { c -> c.isDigit() }.toIntOrNull() ?: 22
-                        onConfigChange(sshConfig.copy(port = port))
-                    },
+                    value = state.sshPort,
+                    onValueChange = { onEvent(ConnectionEvent.UpdateSshPort(it.filter { c -> c.isDigit() })) },
                     label = { Text("SSH Port") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
@@ -67,8 +65,8 @@ fun SshConfigSection(
 
             // SSH Username
             OutlinedTextField(
-                value = sshConfig.username,
-                onValueChange = { onConfigChange(sshConfig.copy(username = it)) },
+                value = state.sshUsername,
+                onValueChange = { onEvent(ConnectionEvent.UpdateSshUsername(it)) },
                 label = { Text("SSH Username") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -80,13 +78,13 @@ fun SshConfigSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Checkbox(
-                    checked = sshConfig.useKeyAuth,
-                    onCheckedChange = { onConfigChange(sshConfig.copy(useKeyAuth = it)) },
+                    checked = state.sshUseKeyAuth,
+                    onCheckedChange = { onEvent(ConnectionEvent.UpdateSshUseKeyAuth(it)) },
                 )
                 Text("Use Private Key Authentication", style = MaterialTheme.typography.bodySmall)
             }
 
-            if (sshConfig.useKeyAuth) {
+            if (state.sshUseKeyAuth) {
                 // Private key path
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -94,8 +92,8 @@ fun SshConfigSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedTextField(
-                        value = sshConfig.privateKeyPath,
-                        onValueChange = { onConfigChange(sshConfig.copy(privateKeyPath = it)) },
+                        value = state.sshPrivateKeyPath,
+                        onValueChange = { onEvent(ConnectionEvent.UpdateSshPrivateKeyPath(it)) },
                         label = { Text("Private Key Path") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
@@ -108,7 +106,7 @@ fun SshConfigSection(
                                 currentDirectory = java.io.File(System.getProperty("user.home"), ".ssh")
                             }
                         if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-                            onConfigChange(sshConfig.copy(privateKeyPath = chooser.selectedFile.absolutePath))
+                            onEvent(ConnectionEvent.UpdateSshPrivateKeyPath(chooser.selectedFile.absolutePath))
                         }
                     }) {
                         Icon(Icons.Default.FolderOpen, "Browse")
@@ -117,8 +115,8 @@ fun SshConfigSection(
 
                 // Passphrase
                 OutlinedTextField(
-                    value = sshConfig.passphrase,
-                    onValueChange = { onConfigChange(sshConfig.copy(passphrase = it)) },
+                    value = state.sshPassphrase,
+                    onValueChange = { onEvent(ConnectionEvent.UpdateSshPassphrase(it)) },
                     label = { Text("Key Passphrase (if any)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -135,8 +133,8 @@ fun SshConfigSection(
             } else {
                 // SSH Password
                 OutlinedTextField(
-                    value = sshConfig.password,
-                    onValueChange = { onConfigChange(sshConfig.copy(password = it)) },
+                    value = state.sshPassword,
+                    onValueChange = { onEvent(ConnectionEvent.UpdateSshPassword(it)) },
                     label = { Text("SSH Password") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,

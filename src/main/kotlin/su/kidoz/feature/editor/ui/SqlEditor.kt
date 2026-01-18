@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorTab
+import su.kidoz.feature.editor.QuerySplitter
 import su.kidoz.feature.parser.QueryParserService
 import su.kidoz.feature.parser.highlight.DatabaseType
 import su.kidoz.feature.parser.highlight.SyntaxTheme
@@ -99,9 +101,10 @@ fun SqlEditor(
     val extendedColors = DBQueTheme.extendedColors
 
     // Create syntax highlighting transformation - uses auto-detection
+    val syntaxTheme = if (extendedColors.isDarkTheme) SyntaxTheme.Dark else SyntaxTheme.Light
     val syntaxHighlightTransformation =
-        remember(extendedColors) {
-            QuerySyntaxHighlightTransformation(parserService)
+        remember(syntaxTheme) {
+            QuerySyntaxHighlightTransformation(parserService, syntaxTheme)
         }
 
     // Current query range for highlighting
@@ -112,7 +115,7 @@ fun SqlEditor(
         EditorToolbar(
             queryCount = tab.queryCount,
             currentQueryNumber = tab.currentQueryNumber,
-            hasSelection = tab.selectedText.isNotEmpty(),
+            selectedText = tab.selectedText,
             onExecuteCurrent = { onEvent(EditorEvent.ExecuteCurrentQuery) },
             onExecuteAll = { onEvent(EditorEvent.ExecuteAllQueries) },
             onExecuteSelected = { onEvent(EditorEvent.ExecuteSelectedQuery) },
@@ -162,90 +165,101 @@ fun SqlEditor(
                 }
             }
 
-            // Editor content
-            Box(
+            // Editor content - use BoxWithConstraints to get available height
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .fillMaxHeight()
-                        .verticalScroll(verticalScroll)
-                        .horizontalScroll(horizontalScroll),
+                        .fillMaxHeight(),
             ) {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        textFieldValue = newValue
-                        onEvent(EditorEvent.UpdateContent(newValue.text))
-                        onEvent(EditorEvent.UpdateCursor(newValue.selection.start))
-                        onEvent(EditorEvent.UpdateSelection(newValue.selection.start, newValue.selection.end))
-                    },
+                val minEditorHeight = maxHeight
+
+                Box(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .padding(vertical = 2.dp)
-                            .focusRequester(focusRequester)
-                            .onPreviewKeyEvent { keyEvent ->
-                                if (keyEvent.type == KeyEventType.KeyDown) {
-                                    when {
-                                        // Ctrl+Enter: Execute current query at cursor
-                                        keyEvent.isCtrlPressed &&
-                                            !keyEvent.isShiftPressed &&
-                                            !keyEvent.isAltPressed &&
-                                            keyEvent.key == Key.Enter -> {
-                                            onEvent(EditorEvent.ExecuteCurrentQuery)
-                                            true
-                                        }
-                                        // Ctrl+Shift+Enter: Execute all queries
-                                        keyEvent.isCtrlPressed &&
-                                            keyEvent.isShiftPressed &&
-                                            keyEvent.key == Key.Enter -> {
-                                            onEvent(EditorEvent.ExecuteAllQueries)
-                                            true
-                                        }
-                                        // Ctrl+E: Execute selected text (if any) or current query
-                                        keyEvent.isCtrlPressed &&
-                                            !keyEvent.isShiftPressed &&
-                                            keyEvent.key == Key.E -> {
-                                            if (tab.selectedText.isNotEmpty()) {
-                                                onEvent(EditorEvent.ExecuteSelectedQuery)
-                                            } else {
+                            .verticalScroll(verticalScroll),
+                ) {
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { newValue ->
+                            textFieldValue = newValue
+                            onEvent(EditorEvent.UpdateContent(newValue.text))
+                            onEvent(EditorEvent.UpdateCursor(newValue.selection.start))
+                            onEvent(EditorEvent.UpdateSelection(newValue.selection.start, newValue.selection.end))
+                        },
+                        modifier =
+                            Modifier
+                                .defaultMinSize(minHeight = minEditorHeight)
+                                .fillMaxWidth()
+                                .horizontalScroll(horizontalScroll)
+                                .padding(vertical = 2.dp)
+                                .focusRequester(focusRequester)
+                                .onPreviewKeyEvent { keyEvent ->
+                                    if (keyEvent.type == KeyEventType.KeyDown) {
+                                        when {
+                                            // Ctrl+Enter: Execute current query at cursor
+                                            keyEvent.isCtrlPressed &&
+                                                !keyEvent.isShiftPressed &&
+                                                !keyEvent.isAltPressed &&
+                                                keyEvent.key == Key.Enter -> {
                                                 onEvent(EditorEvent.ExecuteCurrentQuery)
+                                                true
                                             }
-                                            true
+                                            // Ctrl+Shift+Enter: Execute all queries
+                                            keyEvent.isCtrlPressed &&
+                                                keyEvent.isShiftPressed &&
+                                                keyEvent.key == Key.Enter -> {
+                                                onEvent(EditorEvent.ExecuteAllQueries)
+                                                true
+                                            }
+                                            // Ctrl+E: Execute selected text (if any) or current query
+                                            keyEvent.isCtrlPressed &&
+                                                !keyEvent.isShiftPressed &&
+                                                keyEvent.key == Key.E -> {
+                                                if (tab.selectedText.isNotEmpty()) {
+                                                    onEvent(EditorEvent.ExecuteSelectedQuery)
+                                                } else {
+                                                    onEvent(EditorEvent.ExecuteCurrentQuery)
+                                                }
+                                                true
+                                            }
+                                            // Ctrl+L: Format SQL
+                                            keyEvent.isCtrlPressed && keyEvent.key == Key.L -> {
+                                                onEvent(EditorEvent.Format)
+                                                true
+                                            }
+                                            else -> false
                                         }
-                                        // Ctrl+L: Format SQL
-                                        keyEvent.isCtrlPressed && keyEvent.key == Key.L -> {
-                                            onEvent(EditorEvent.Format)
-                                            true
-                                        }
-                                        else -> false
+                                    } else {
+                                        false
                                     }
-                                } else {
-                                    false
+                                },
+                        textStyle = EditorTypography.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        visualTransformation = syntaxHighlightTransformation,
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                if (tab.content.isEmpty()) {
+                                    val placeholder =
+                                        when (queryType) {
+                                            DatabaseType.MONGODB -> "db.collection.find({...}) (Ctrl+Enter to execute)"
+                                            DatabaseType.ELASTICSEARCH -> "{\"query\": {...}} (Ctrl+Enter to execute)"
+                                            else -> "Enter SQL query here... (Ctrl+Enter to execute)"
+                                        }
+                                    Text(
+                                        text = placeholder,
+                                        style = EditorTypography,
+                                        color = extendedColors.editorLineNumber,
+                                    )
                                 }
-                            },
-                    textStyle = EditorTypography.copy(color = MaterialTheme.colorScheme.onSurface),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    visualTransformation = syntaxHighlightTransformation,
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (tab.content.isEmpty()) {
-                                val placeholder =
-                                    when (queryType) {
-                                        DatabaseType.MONGODB -> "db.collection.find({...}) (Ctrl+Enter to execute)"
-                                        DatabaseType.ELASTICSEARCH -> "{\"query\": {...}} (Ctrl+Enter to execute)"
-                                        else -> "Enter SQL query here... (Ctrl+Enter to execute)"
-                                    }
-                                Text(
-                                    text = placeholder,
-                                    style = EditorTypography,
-                                    color = extendedColors.editorLineNumber,
-                                )
+                                innerTextField()
                             }
-                            innerTextField()
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
         }
 
@@ -281,9 +295,10 @@ private fun getLineNumber(
  */
 class QuerySyntaxHighlightTransformation(
     private val parserService: QueryParserService,
+    private val theme: SyntaxTheme,
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        val highlighted = parserService.highlight(text.text, SyntaxTheme.Dark)
+        val highlighted = parserService.highlight(text.text, theme)
         return TransformedText(highlighted, OffsetMapping.Identity)
     }
 }
@@ -308,117 +323,138 @@ class SqlSyntaxHighlightTransformation(
 private fun EditorToolbar(
     queryCount: Int,
     currentQueryNumber: Int,
-    hasSelection: Boolean,
+    selectedText: String,
     onExecuteCurrent: () -> Unit,
     onExecuteAll: () -> Unit,
     onExecuteSelected: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier =
-            modifier
-                .height(32.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Query counter
-        Text(
-            text =
-                if (queryCount > 0) {
-                    "Query $currentQueryNumber of $queryCount"
-                } else {
-                    "No queries"
-                },
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        VerticalDivider(
-            modifier = Modifier.height(20.dp),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Execute current query button
-        TextButton(
-            onClick = onExecuteCurrent,
-            enabled = queryCount > 0,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            colors =
-                ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ),
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Execute current query",
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Run (Ctrl+Enter)",
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-
-        // Execute all queries button
-        if (queryCount > 1) {
-            TextButton(
-                onClick = onExecuteAll,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                colors =
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.secondary,
-                    ),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
-                    contentDescription = "Execute all queries",
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Run All (Ctrl+Shift+Enter)",
-                    style = MaterialTheme.typography.labelSmall,
-                )
+    // Calculate number of queries in selection
+    val selectedQueryCount =
+        remember(selectedText) {
+            if (selectedText.isNotEmpty()) {
+                QuerySplitter.getAllQueries(selectedText).size
+            } else {
+                0
             }
         }
+    val hasSelection = selectedText.isNotEmpty()
 
-        // Execute selection button (shown when text is selected)
-        if (hasSelection) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .height(32.dp)
+                    .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Query counter
+            Text(
+                text =
+                    if (queryCount > 0) {
+                        "Query $currentQueryNumber of $queryCount"
+                    } else {
+                        "No queries"
+                    },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            VerticalDivider(
+                modifier = Modifier.height(20.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Execute current query button
             TextButton(
-                onClick = onExecuteSelected,
+                onClick = onExecuteCurrent,
+                enabled = queryCount > 0,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 colors =
                     ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.tertiary,
+                        contentColor = MaterialTheme.colorScheme.primary,
                     ),
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Execute selection",
+                    contentDescription = "Execute current query",
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Run Selection",
+                    text = "Run (Ctrl+Enter)",
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+
+            // Execute all queries button
+            if (queryCount > 1) {
+                TextButton(
+                    onClick = onExecuteAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.secondary,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                        contentDescription = "Execute all queries",
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Run All (Ctrl+Shift+Enter)",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
+            // Execute selection button (shown when text is selected)
+            if (hasSelection) {
+                TextButton(
+                    onClick = onExecuteSelected,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.tertiary,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Execute selection",
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text =
+                            if (selectedQueryCount > 1) {
+                                "Run $selectedQueryCount Queries"
+                            } else {
+                                "Run Selection"
+                            },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Keyboard shortcuts hint
+            Text(
+                text = "Ctrl+E: Run | Ctrl+L: Format",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Keyboard shortcuts hint
-        Text(
-            text = "Ctrl+E: Run | Ctrl+L: Format",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
     }
 }
 

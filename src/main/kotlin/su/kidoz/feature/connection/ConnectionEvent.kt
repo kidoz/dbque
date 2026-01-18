@@ -55,6 +55,39 @@ sealed interface ConnectionEvent : UiEvent {
         val useSsl: Boolean,
     ) : ConnectionEvent
 
+    // SSH Tunnel
+    data class UpdateSshEnabled(
+        val enabled: Boolean,
+    ) : ConnectionEvent
+
+    data class UpdateSshHost(
+        val host: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshPort(
+        val port: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshUsername(
+        val username: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshPassword(
+        val password: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshPrivateKeyPath(
+        val path: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshPassphrase(
+        val passphrase: String,
+    ) : ConnectionEvent
+
+    data class UpdateSshUseKeyAuth(
+        val useKeyAuth: Boolean,
+    ) : ConnectionEvent
+
     // Actions
     data object TestConnection : ConnectionEvent
 

@@ -567,7 +567,7 @@ class MongoGrammar : Grammar<MongoNode>() {
             "hint" to
                 when (value) {
                     is MongoObject -> value
-                    else -> MongoScalar((value as TokenMatch).text.let { parseString(it) }, (value as TokenMatch).pos())
+                    else -> (value as TokenMatch).let { MongoScalar(parseString(it.text), it.pos()) }
                 }
         }
     }

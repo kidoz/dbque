@@ -29,12 +29,38 @@ fun ResultsPanel(
             ResultTabs(state = state, onEvent = onEvent)
         }
 
-        // Data grid
-        DataGrid(
-            state = state,
-            onEvent = onEvent,
-            modifier = Modifier.weight(1f),
-        )
+        // Data grid - use editable version when in edit mode
+        if (state.isEditMode && state.activeResult?.isResultSet == true) {
+            state.activeResult?.let { result ->
+                EditableDataGrid(
+                    result = result,
+                    editedCells = state.pendingEdits,
+                    editingCell = state.editingCell,
+                    selectedRows = state.selectedRows,
+                    selectedColumn = state.selectedColumn,
+                    sortColumn = state.sortColumn,
+                    sortAscending = state.sortAscending,
+                    onStartEdit = { rowIndex, colIndex, value ->
+                        onEvent(ResultsEvent.StartCellEdit(rowIndex, colIndex, value))
+                    },
+                    onUpdateEdit = { value -> onEvent(ResultsEvent.UpdateCellEdit(value)) },
+                    onCommitEdit = { onEvent(ResultsEvent.CommitCellEdit) },
+                    onCancelEdit = { onEvent(ResultsEvent.CancelCellEdit) },
+                    onSelectRow = { rowIndex, addToSelection ->
+                        onEvent(ResultsEvent.SelectRow(rowIndex, addToSelection))
+                    },
+                    onSelectColumn = { colIndex -> onEvent(ResultsEvent.SelectColumn(colIndex)) },
+                    onSortColumn = { colIndex -> onEvent(ResultsEvent.SortByColumn(colIndex)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            DataGrid(
+                state = state,
+                onEvent = onEvent,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 
     // Export dialog
@@ -45,6 +71,15 @@ fun ResultsPanel(
             },
             onDismiss = { onEvent(ResultsEvent.HideExportDialog) },
             hasSelection = state.selectedRows.isNotEmpty(),
+        )
+    }
+
+    // Delete confirmation dialog
+    if (state.deleteConfirmationVisible) {
+        DeleteConfirmationDialog(
+            rowCount = state.selectedRows.size,
+            onConfirm = { onEvent(ResultsEvent.DeleteSelectedRows) },
+            onDismiss = { onEvent(ResultsEvent.HideDeleteConfirmation) },
         )
     }
 }
@@ -88,6 +123,62 @@ private fun ResultsToolbar(
             )
 
             Spacer(Modifier.weight(1f))
+
+            // Edit mode controls (only for result sets with table info)
+            if (state.activeResult?.isResultSet == true && state.tableName != null) {
+                // Edit mode toggle
+                TooltipIconButton(
+                    icon = if (state.isEditMode) Icons.Default.EditOff else Icons.Default.Edit,
+                    tooltip = if (state.isEditMode) "Exit edit mode" else "Enter edit mode",
+                    onClick = { onEvent(ResultsEvent.SetEditMode(!state.isEditMode)) },
+                    enabled = !state.hasPendingChanges || !state.isEditMode,
+                )
+
+                if (state.isEditMode) {
+                    // Delete button
+                    TooltipIconButton(
+                        icon = Icons.Default.Delete,
+                        tooltip = "Delete selected rows",
+                        onClick = { onEvent(ResultsEvent.ShowDeleteConfirmation) },
+                        enabled = state.selectedRows.isNotEmpty() && !state.isSaving,
+                    )
+
+                    // Discard changes button
+                    TooltipIconButton(
+                        icon = Icons.Default.Refresh,
+                        tooltip = "Discard changes",
+                        onClick = { onEvent(ResultsEvent.DiscardChanges) },
+                        enabled = state.hasPendingChanges && !state.isSaving,
+                    )
+
+                    // Save changes button
+                    TooltipIconButton(
+                        icon = Icons.Default.Save,
+                        tooltip = "Save changes",
+                        onClick = { onEvent(ResultsEvent.SaveChanges) },
+                        enabled = state.hasPendingChanges && !state.isSaving,
+                    )
+
+                    // Pending changes indicator
+                    if (state.hasPendingChanges) {
+                        Text(
+                            "${state.pendingEdits.size} change(s)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+
+                    // Saving indicator
+                    if (state.isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
+
+                VerticalDivider(modifier = Modifier.height(24.dp))
+            }
 
             // Copy buttons
             TooltipIconButton(
@@ -149,7 +240,7 @@ private fun TooltipIconButton(
     enabled: Boolean = true,
 ) {
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = { PlainTooltip { Text(tooltip) } },
         state = rememberTooltipState(),
     ) {
@@ -222,6 +313,38 @@ private fun ExportDialog(
         confirmButton = {
             Button(onClick = { onExport(selectedFormat, exportSelectedOnly) }) {
                 Text("Export")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteConfirmationDialog(
+    rowCount: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+        title = { Text("Delete Rows") },
+        text = {
+            Text(
+                "Are you sure you want to delete $rowCount row(s)? This action cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text("Delete")
             }
         },
         dismissButton = {

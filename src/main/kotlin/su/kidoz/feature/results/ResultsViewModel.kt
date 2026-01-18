@@ -6,13 +6,16 @@ import kotlinx.coroutines.withContext
 import su.kidoz.database.export.CsvExporter
 import su.kidoz.database.export.JsonExporter
 import su.kidoz.database.export.SqlExporter
+import su.kidoz.feature.results.ui.EditingCell
 import su.kidoz.mvi.MviViewModel
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
 import javax.swing.JFileChooser
 
-class ResultsViewModel : MviViewModel<ResultsState, ResultsEvent, ResultsEffect>(ResultsState()) {
+class ResultsViewModel(
+    private val dataEditor: DataEditor,
+) : MviViewModel<ResultsState, ResultsEvent, ResultsEffect>(ResultsState()) {
     override fun onEvent(event: ResultsEvent) {
         when (event) {
             is ResultsEvent.SetResults -> setResults(event.results)
@@ -32,6 +35,18 @@ class ResultsViewModel : MviViewModel<ResultsState, ResultsEvent, ResultsEffect>
             is ResultsEvent.ShowExportDialog -> showExportDialog()
             is ResultsEvent.HideExportDialog -> hideExportDialog()
             is ResultsEvent.Export -> export(event.format, event.selectedOnly)
+            // Edit mode events
+            is ResultsEvent.SetEditMode -> setEditMode(event.enabled)
+            is ResultsEvent.SetTableInfo -> setTableInfo(event.tableName, event.schemaName, event.primaryKeyColumns)
+            is ResultsEvent.StartCellEdit -> startCellEdit(event.rowIndex, event.columnIndex, event.value)
+            is ResultsEvent.UpdateCellEdit -> updateCellEdit(event.value)
+            is ResultsEvent.CommitCellEdit -> commitCellEdit()
+            is ResultsEvent.CancelCellEdit -> cancelCellEdit()
+            is ResultsEvent.SaveChanges -> saveChanges()
+            is ResultsEvent.DiscardChanges -> discardChanges()
+            is ResultsEvent.ShowDeleteConfirmation -> showDeleteConfirmation()
+            is ResultsEvent.HideDeleteConfirmation -> hideDeleteConfirmation()
+            is ResultsEvent.DeleteSelectedRows -> deleteSelectedRows()
         }
     }
 
@@ -248,6 +263,235 @@ class ResultsViewModel : MviViewModel<ResultsState, ResultsEvent, ResultsEffect>
             } finally {
                 updateState { copy(isExporting = false) }
             }
+        }
+    }
+
+    // Edit mode methods
+    private fun setEditMode(enabled: Boolean) {
+        if (!enabled && currentState.hasPendingChanges) {
+            sendEffect(ResultsEffect.ShowMessage("Please save or discard changes first"))
+            return
+        }
+        updateState {
+            copy(
+                isEditMode = enabled,
+                editingCell = null,
+                pendingEdits = if (!enabled) emptyMap() else pendingEdits,
+            )
+        }
+    }
+
+    private fun setTableInfo(
+        tableName: String,
+        schemaName: String?,
+        primaryKeyColumns: List<Int>,
+    ) {
+        updateState {
+            copy(
+                tableName = tableName,
+                schemaName = schemaName,
+                primaryKeyColumns = primaryKeyColumns,
+            )
+        }
+    }
+
+    private fun startCellEdit(
+        rowIndex: Int,
+        columnIndex: Int,
+        value: Any?,
+    ) {
+        if (!currentState.isEditMode) return
+
+        updateState {
+            copy(
+                editingCell =
+                    EditingCell(
+                        rowIndex = rowIndex,
+                        columnIndex = columnIndex,
+                        originalValue = value,
+                        currentValue = value?.toString() ?: "",
+                    ),
+            )
+        }
+    }
+
+    private fun updateCellEdit(value: String) {
+        val editingCell = currentState.editingCell ?: return
+        updateState {
+            copy(editingCell = editingCell.copy(currentValue = value))
+        }
+    }
+
+    private fun commitCellEdit() {
+        val editingCell = currentState.editingCell ?: return
+        val result = currentState.activeResult ?: return
+        val column = result.columns.getOrNull(editingCell.columnIndex) ?: return
+
+        // Check if value actually changed
+        val originalValueStr = editingCell.originalValue?.toString() ?: ""
+        if (editingCell.currentValue == originalValueStr) {
+            updateState { copy(editingCell = null) }
+            return
+        }
+
+        // Parse the new value to the appropriate type
+        val newValue: Any? = parseValue(editingCell.currentValue, column.jdbcType)
+
+        val cellKey = editingCell.rowIndex to editingCell.columnIndex
+        val cellEdit =
+            CellEdit(
+                rowIndex = editingCell.rowIndex,
+                columnIndex = editingCell.columnIndex,
+                oldValue = editingCell.originalValue,
+                newValue = newValue,
+                column = column,
+            )
+
+        updateState {
+            copy(
+                pendingEdits = pendingEdits + (cellKey to cellEdit),
+                editingCell = null,
+            )
+        }
+    }
+
+    private fun cancelCellEdit() {
+        updateState { copy(editingCell = null) }
+    }
+
+    private fun saveChanges() {
+        val tableName = currentState.tableName
+        if (tableName == null) {
+            sendEffect(ResultsEffect.ShowError("Table name not set - cannot save changes"))
+            return
+        }
+
+        val result = currentState.activeResult ?: return
+        val edits = currentState.pendingEdits.values.toList()
+
+        if (edits.isEmpty()) {
+            sendEffect(ResultsEffect.ShowMessage("No changes to save"))
+            return
+        }
+
+        viewModelScope.launch {
+            updateState { copy(isSaving = true) }
+
+            try {
+                val changes =
+                    PendingChanges(
+                        tableName = tableName,
+                        schema = currentState.schemaName,
+                        edits = edits,
+                        primaryKeyColumns = currentState.primaryKeyColumns,
+                    )
+
+                val affectedRows = dataEditor.applyChanges(changes, result).getOrThrow()
+
+                updateState {
+                    copy(
+                        pendingEdits = emptyMap(),
+                        isSaving = false,
+                    )
+                }
+
+                sendEffect(ResultsEffect.ChangesSaved(affectedRows))
+                sendEffect(ResultsEffect.RefreshData)
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to save changes" }
+                updateState { copy(isSaving = false) }
+                sendEffect(ResultsEffect.ShowError(e.message ?: "Failed to save changes"))
+            }
+        }
+    }
+
+    private fun discardChanges() {
+        updateState {
+            copy(
+                pendingEdits = emptyMap(),
+                editingCell = null,
+            )
+        }
+        sendEffect(ResultsEffect.ShowMessage("Changes discarded"))
+    }
+
+    private fun showDeleteConfirmation() {
+        if (currentState.selectedRows.isEmpty()) {
+            sendEffect(ResultsEffect.ShowMessage("No rows selected"))
+            return
+        }
+        updateState { copy(deleteConfirmationVisible = true) }
+    }
+
+    private fun hideDeleteConfirmation() {
+        updateState { copy(deleteConfirmationVisible = false) }
+    }
+
+    private fun deleteSelectedRows() {
+        val tableName = currentState.tableName
+        if (tableName == null) {
+            sendEffect(ResultsEffect.ShowError("Table name not set - cannot delete rows"))
+            return
+        }
+
+        val result = currentState.activeResult ?: return
+        val selectedRows = currentState.selectedRows.sorted()
+        val rows = selectedRows.mapNotNull { result.rows.getOrNull(it) }
+
+        if (rows.isEmpty()) {
+            sendEffect(ResultsEffect.ShowMessage("No rows to delete"))
+            return
+        }
+
+        viewModelScope.launch {
+            updateState { copy(isSaving = true, deleteConfirmationVisible = false) }
+
+            try {
+                val affectedRows =
+                    dataEditor
+                        .deleteRows(
+                            tableName = tableName,
+                            schema = currentState.schemaName,
+                            columns = result.columns,
+                            rows = rows,
+                            primaryKeyColumns = currentState.primaryKeyColumns,
+                        ).getOrThrow()
+
+                updateState {
+                    copy(
+                        selectedRows = emptySet(),
+                        isSaving = false,
+                    )
+                }
+
+                sendEffect(ResultsEffect.RowsDeleted(affectedRows))
+                sendEffect(ResultsEffect.RefreshData)
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to delete rows" }
+                updateState { copy(isSaving = false) }
+                sendEffect(ResultsEffect.ShowError(e.message ?: "Failed to delete rows"))
+            }
+        }
+    }
+
+    private fun parseValue(
+        value: String,
+        jdbcType: Int,
+    ): Any? {
+        if (value.isEmpty() || value.equals("NULL", ignoreCase = true)) {
+            return null
+        }
+
+        return when (jdbcType) {
+            java.sql.Types.BOOLEAN, java.sql.Types.BIT ->
+                value.equals("true", ignoreCase = true) || value == "1"
+            java.sql.Types.TINYINT, java.sql.Types.SMALLINT, java.sql.Types.INTEGER ->
+                value.toIntOrNull() ?: value
+            java.sql.Types.BIGINT -> value.toLongOrNull() ?: value
+            java.sql.Types.FLOAT, java.sql.Types.REAL -> value.toFloatOrNull() ?: value
+            java.sql.Types.DOUBLE, java.sql.Types.DECIMAL, java.sql.Types.NUMERIC ->
+                value.toDoubleOrNull() ?: value
+            else -> value
         }
     }
 }

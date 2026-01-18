@@ -2,6 +2,7 @@ package su.kidoz.database
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,17 +10,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import mu.KotlinLogging
 import su.kidoz.core.model.ConnectionConfig
 import su.kidoz.core.model.DatabaseType
 import su.kidoz.database.driver.DatabaseDriver
 import su.kidoz.database.driver.DatabaseDriverFactory
+import su.kidoz.database.ssh.SshTunnel
+import su.kidoz.database.ssh.SshTunnelManager
+import su.kidoz.database.ssh.TunnelConfig
 import java.sql.Connection
 
 data class ActiveConnection(
     val config: ConnectionConfig,
     val driver: DatabaseDriver,
     val databaseConnection: DatabaseConnection,
+    val sshTunnel: SshTunnel? = null,
 ) {
     /**
      * Get JDBC connection for SQL databases.
@@ -80,13 +84,16 @@ data class ActiveConnection(
 
     fun close() {
         databaseConnection.close()
+        sshTunnel?.close()
     }
 
     val isValid: Boolean
         get() = databaseConnection.isValid
 }
 
-class ConnectionManager {
+class ConnectionManager(
+    private val sshTunnelManager: SshTunnelManager,
+) {
     private val logger = KotlinLogging.logger {}
     private val mutex = Mutex()
 
@@ -105,20 +112,47 @@ class ConnectionManager {
                 runCatching {
                     logger.info { "Connecting to ${config.toDisplayString()}" }
 
+                    var sshTunnel: SshTunnel? = null
+                    var effectiveConfig = config
+
+                    // Create SSH tunnel if enabled
+                    if (config.sshConfig.enabled) {
+                        logger.info { "Creating SSH tunnel to ${config.sshConfig.host}:${config.sshConfig.port}" }
+
+                        val tunnelConfig =
+                            TunnelConfig(
+                                sshConfig = config.sshConfig,
+                                remoteHost = config.host,
+                                remotePort = config.effectivePort,
+                            )
+
+                        val tunnel = sshTunnelManager.createTunnel(config.id, tunnelConfig).getOrThrow()
+                        sshTunnel = tunnel
+
+                        // Update config to use tunnel's local port
+                        effectiveConfig =
+                            config.copy(
+                                host = "localhost",
+                                port = tunnel.localPort,
+                            )
+
+                        logger.info { "SSH tunnel established on local port ${tunnel.localPort}" }
+                    }
+
                     val driver = DatabaseDriverFactory.getDriver(config.type)
 
                     // Test connection first
-                    driver.testConnection(config).getOrThrow()
+                    driver.testConnection(effectiveConfig).getOrThrow()
 
                     // Create connection based on database type
                     val databaseConnection =
                         when (config.type) {
-                            DatabaseType.MONGODB -> connectMongo(config)
-                            DatabaseType.ELASTICSEARCH -> connectElasticsearch(config)
-                            else -> connectJdbc(config)
+                            DatabaseType.MONGODB -> connectMongo(effectiveConfig)
+                            DatabaseType.ELASTICSEARCH -> connectElasticsearch(effectiveConfig)
+                            else -> connectJdbc(effectiveConfig)
                         }
 
-                    val activeConnection = ActiveConnection(config, driver, databaseConnection)
+                    val activeConnection = ActiveConnection(config, driver, databaseConnection, sshTunnel)
 
                     _connections.value = _connections.value + (config.id to activeConnection)
                     _activeConnectionId.value = config.id
@@ -172,6 +206,7 @@ class ConnectionManager {
                 _connections.value[connectionId]?.let { connection ->
                     logger.info { "Disconnecting from ${connection.config.toDisplayString()}" }
                     connection.close()
+                    sshTunnelManager.closeTunnel(connectionId)
                     _connections.value = _connections.value - connectionId
 
                     if (_activeConnectionId.value == connectionId) {
@@ -185,6 +220,7 @@ class ConnectionManager {
         mutex.withLock {
             withContext(Dispatchers.IO) {
                 _connections.value.values.forEach { it.close() }
+                sshTunnelManager.closeAll()
                 _connections.value = emptyMap()
                 _activeConnectionId.value = null
             }

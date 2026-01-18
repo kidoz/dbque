@@ -1,11 +1,20 @@
 package su.kidoz.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -38,6 +47,10 @@ import su.kidoz.feature.savedqueries.SavedQueryEffect
 import su.kidoz.feature.savedqueries.SavedQueryEvent
 import su.kidoz.feature.savedqueries.SavedQueryViewModel
 import su.kidoz.feature.savedqueries.ui.SavedQueriesPanel
+import su.kidoz.feature.settings.SettingsEffect
+import su.kidoz.feature.settings.SettingsEvent
+import su.kidoz.feature.settings.SettingsViewModel
+import su.kidoz.feature.settings.ui.SettingsDialog
 import su.kidoz.ui.components.HorizontalSplitPane
 import su.kidoz.ui.components.MainToolbar
 import su.kidoz.ui.components.StatusBar
@@ -48,6 +61,7 @@ private enum class ResultsTab(
 ) {
     Results("Results"),
     QueryPlan("Query Plan"),
+    History("History"),
 }
 
 @Composable
@@ -59,6 +73,7 @@ fun MainWindow() {
     val historyViewModel: HistoryViewModel = koinInject()
     val queryPlanViewModel: QueryPlanViewModel = koinInject()
     val savedQueryViewModel: SavedQueryViewModel = koinInject()
+    val settingsViewModel: SettingsViewModel = koinInject()
     val connectionManager: ConnectionManager = koinInject()
 
     val connectionState by connectionViewModel.state.collectAsState()
@@ -68,6 +83,7 @@ fun MainWindow() {
     val historyState by historyViewModel.state.collectAsState()
     val queryPlanState by queryPlanViewModel.state.collectAsState()
     val savedQueryState by savedQueryViewModel.state.collectAsState()
+    val settingsState by settingsViewModel.state.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var activeResultsTab by remember { mutableStateOf(ResultsTab.Results) }
@@ -167,6 +183,21 @@ fun MainWindow() {
                     }
                 }
             }.launchIn(this)
+
+        settingsViewModel.effect
+            .onEach { effect ->
+                when (effect) {
+                    is SettingsEffect.SettingsSaved -> {
+                        snackbarHostState.showSnackbar("Settings saved")
+                    }
+                    is SettingsEffect.SettingsReset -> {
+                        snackbarHostState.showSnackbar("Settings reset to defaults")
+                    }
+                    is SettingsEffect.ShowError -> {
+                        snackbarHostState.showSnackbar(effect.message)
+                    }
+                }
+            }.launchIn(this)
     }
 
     val activeConnection = connectionManager.activeConnection
@@ -174,94 +205,109 @@ fun MainWindow() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(paddingValues),
         ) {
-            // Toolbar
-            MainToolbar(
-                connectionName = activeConnection?.config?.name,
-                isExecuting = editorState.isExecuting,
-                onExecute = { editorViewModel.onEvent(EditorEvent.ExecuteQuery) },
-                onCancel = { editorViewModel.onEvent(EditorEvent.CancelExecution) },
-                onNewTab = { editorViewModel.onEvent(EditorEvent.NewTab) },
-            )
-
-            // Main content
-            HorizontalSplitPane(
-                modifier = Modifier.weight(1f),
-                splitFraction = 0.2f,
-                firstPane = {
-                    // Left sidebar - Connections, Explorer, and Saved Queries
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Connections
-                        ConnectionList(
-                            state = connectionState,
-                            onEvent = connectionViewModel::onEvent,
-                            modifier = Modifier.weight(0.3f),
-                        )
-
-                        // Database Explorer
-                        DatabaseTree(
-                            state = explorerState,
-                            onEvent = explorerViewModel::onEvent,
-                            modifier = Modifier.weight(0.4f),
-                        )
-
-                        // Saved Queries
-                        SavedQueriesPanel(
-                            state = savedQueryState,
-                            onEvent = savedQueryViewModel::onEvent,
-                            modifier = Modifier.weight(0.3f),
-                        )
+            val isCompact = maxWidth < 1100.dp
+            val tabs =
+                remember(isCompact) {
+                    if (isCompact) {
+                        listOf(ResultsTab.Results, ResultsTab.QueryPlan, ResultsTab.History)
+                    } else {
+                        listOf(ResultsTab.Results, ResultsTab.QueryPlan)
                     }
-                },
-                secondPane = {
-                    HorizontalSplitPane(
-                        splitFraction = 0.8f,
-                        firstPane = {
-                            // Center - Editor and Results
-                            VerticalSplitPane(
-                                splitFraction = 0.5f,
-                                firstPane = {
-                                    // Editor
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        EditorTabs(
-                                            state = editorState,
-                                            onEvent = editorViewModel::onEvent,
-                                            onSaveQuery = { query ->
-                                                savedQueryViewModel.onEvent(
-                                                    SavedQueryEvent.ShowSaveCurrentQueryDialog(query),
-                                                )
-                                            },
-                                        )
-                                        editorState.activeTab?.let { tab ->
-                                            SqlEditor(
-                                                tab = tab,
-                                                onEvent = editorViewModel::onEvent,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                        }
-                                    }
-                                },
-                                secondPane = {
-                                    // Results area with tabs
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        // Result tabs (Results / Query Plan)
-                                        ResultsAreaTabs(
-                                            activeTab = activeResultsTab,
-                                            onTabSelected = { activeResultsTab = it },
-                                        )
+                }
 
-                                        when (activeResultsTab) {
+            LaunchedEffect(isCompact) {
+                if (!isCompact && activeResultsTab == ResultsTab.History) {
+                    activeResultsTab = ResultsTab.Results
+                }
+            }
+
+            val backgroundBrush =
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    ),
+                )
+
+            var contentVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                contentVisible = true
+            }
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(backgroundBrush),
+            ) {
+                // Toolbar
+                MainToolbar(
+                    connectionName = activeConnection?.config?.name,
+                    isExecuting = editorState.isExecuting,
+                    onExecute = { editorViewModel.onEvent(EditorEvent.ExecuteQuery) },
+                    onCancel = { editorViewModel.onEvent(EditorEvent.CancelExecution) },
+                    onNewTab = { editorViewModel.onEvent(EditorEvent.NewTab) },
+                    onSettings = { settingsViewModel.onEvent(SettingsEvent.ShowDialog) },
+                )
+
+                val editorAndResultsPane: @Composable () -> Unit = {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surface),
+                    ) {
+                        VerticalSplitPane(
+                            splitFraction = 0.55f,
+                            firstPane = {
+                                // Editor
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    EditorTabs(
+                                        state = editorState,
+                                        onEvent = editorViewModel::onEvent,
+                                        onSaveQuery = { query ->
+                                            savedQueryViewModel.onEvent(
+                                                SavedQueryEvent.ShowSaveCurrentQueryDialog(query),
+                                            )
+                                        },
+                                    )
+                                    editorState.activeTab?.let { tab ->
+                                        SqlEditor(
+                                            tab = tab,
+                                            onEvent = editorViewModel::onEvent,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                }
+                            },
+                            secondPane = {
+                                // Results area with tabs
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    ResultsAreaTabs(
+                                        tabs = tabs,
+                                        activeTab = activeResultsTab,
+                                        onTabSelected = { activeResultsTab = it },
+                                    )
+
+                                    AnimatedContent(
+                                        targetState = activeResultsTab,
+                                        transitionSpec = {
+                                            (fadeIn() + slideInVertically(initialOffsetY = { it / 6 }))
+                                                .togetherWith(fadeOut() + slideOutVertically(targetOffsetY = { -it / 8 }))
+                                        },
+                                    ) { targetTab ->
+                                        when (targetTab) {
                                             ResultsTab.Results -> {
                                                 ResultsPanel(
                                                     state = resultsState,
                                                     onEvent = resultsViewModel::onEvent,
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier.fillMaxSize(),
                                                 )
                                             }
                                             ResultsTab.QueryPlan -> {
-                                                // Calculate max cost from plan nodes for visualization
                                                 val maxCost =
                                                     queryPlanState.planNodes
                                                         .mapNotNull { it.totalCost }
@@ -270,36 +316,97 @@ fun MainWindow() {
                                                     state = queryPlanState,
                                                     onEvent = queryPlanViewModel::onEvent,
                                                     maxCost = maxCost,
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                            ResultsTab.History -> {
+                                                HistoryPanel(
+                                                    state = historyState,
+                                                    onEvent = historyViewModel::onEvent,
+                                                    modifier = Modifier.fillMaxSize(),
                                                 )
                                             }
                                         }
                                     }
-                                },
-                            )
+                                }
+                            },
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = contentVisible,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 10 }),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    // Main content
+                    HorizontalSplitPane(
+                        splitFraction = if (isCompact) 0.26f else 0.2f,
+                        firstPane = {
+                            // Left sidebar - Connections, Explorer, and Saved Queries
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surface),
+                            ) {
+                                ConnectionList(
+                                    state = connectionState,
+                                    onEvent = connectionViewModel::onEvent,
+                                    modifier = Modifier.weight(0.3f),
+                                )
+
+                                DatabaseTree(
+                                    state = explorerState,
+                                    onEvent = explorerViewModel::onEvent,
+                                    modifier = Modifier.weight(0.4f),
+                                )
+
+                                SavedQueriesPanel(
+                                    state = savedQueryState,
+                                    onEvent = savedQueryViewModel::onEvent,
+                                    modifier = Modifier.weight(0.3f),
+                                )
+                            }
                         },
                         secondPane = {
-                            // Right sidebar - History
-                            HistoryPanel(
-                                state = historyState,
-                                onEvent = historyViewModel::onEvent,
-                            )
+                            if (isCompact) {
+                                editorAndResultsPane()
+                            } else {
+                                HorizontalSplitPane(
+                                    splitFraction = 0.8f,
+                                    firstPane = { editorAndResultsPane() },
+                                    secondPane = {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surface),
+                                        ) {
+                                            HistoryPanel(
+                                                state = historyState,
+                                                onEvent = historyViewModel::onEvent,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                         },
                     )
-                },
-            )
+                }
 
-            // Status bar
-            StatusBar(
-                connectionStatus = activeConnection?.config?.toDisplayString(),
-                queryStatus = if (editorState.isExecuting) "Executing..." else null,
-                cursorPosition =
-                    editorState.activeTab?.let {
-                        val lines = it.content.substring(0, it.cursorPosition).count { c -> c == '\n' } + 1
-                        val col = it.cursorPosition - it.content.lastIndexOf('\n', it.cursorPosition - 1)
-                        "Ln $lines, Col $col"
-                    },
-            )
+                // Status bar
+                StatusBar(
+                    connectionStatus = activeConnection?.config?.toDisplayString(),
+                    queryStatus = if (editorState.isExecuting) "Executing..." else null,
+                    cursorPosition =
+                        editorState.activeTab?.let {
+                            val lines = it.content.substring(0, it.cursorPosition).count { c -> c == '\n' } + 1
+                            val col = it.cursorPosition - it.content.lastIndexOf('\n', it.cursorPosition - 1)
+                            "Ln $lines, Col $col"
+                        },
+                )
+            }
         }
     }
 
@@ -343,10 +450,17 @@ fun MainWindow() {
             },
         )
     }
+
+    // Settings dialog
+    SettingsDialog(
+        state = settingsState,
+        onEvent = settingsViewModel::onEvent,
+    )
 }
 
 @Composable
 private fun ResultsAreaTabs(
+    tabs: List<ResultsTab>,
     activeTab: ResultsTab,
     onTabSelected: (ResultsTab) -> Unit,
 ) {
@@ -354,31 +468,42 @@ private fun ResultsAreaTabs(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        ResultsTab.entries.forEach { tab ->
-            Surface(
-                modifier =
-                    Modifier
-                        .clickable { onTabSelected(tab) }
-                        .padding(horizontal = 1.dp),
-                color =
-                    if (tab == activeTab) {
+        tabs.forEach { tab ->
+            val isActive = tab == activeTab
+            val containerColor by animateColorAsState(
+                targetValue =
+                    if (isActive) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
                     },
+                label = "resultsTabContainer",
+            )
+            val textColor by animateColorAsState(
+                targetValue =
+                    if (isActive) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                label = "resultsTabText",
+            )
+            Surface(
+                modifier =
+                    Modifier
+                        .padding(horizontal = 4.dp)
+                        .clickable { onTabSelected(tab) },
+                color = containerColor,
+                shape = MaterialTheme.shapes.small,
             ) {
                 Text(
                     text = tab.title,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                     style = MaterialTheme.typography.labelMedium,
-                    color =
-                        if (tab == activeTab) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                    color = textColor,
                 )
             }
         }

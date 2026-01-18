@@ -17,24 +17,25 @@ fun MainToolbar(
     onExecute: () -> Unit,
     onCancel: () -> Unit,
     onNewTab: () -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        tonalElevation = 2.dp,
         modifier = modifier,
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // New tab button
             TooltipBox(
-                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                 tooltip = { PlainTooltip { Text("New Query Tab (Ctrl+T)") } },
                 state = rememberTooltipState(),
             ) {
@@ -49,6 +50,7 @@ fun MainToolbar(
             if (isExecuting) {
                 Button(
                     onClick = onCancel,
+                    shape = MaterialTheme.shapes.medium,
                     colors =
                         ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
@@ -63,7 +65,15 @@ fun MainToolbar(
                     Text("Cancel")
                 }
             } else {
-                Button(onClick = onExecute) {
+                Button(
+                    onClick = onExecute,
+                    shape = MaterialTheme.shapes.medium,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
                     Icon(
                         Icons.Default.PlayArrow,
                         contentDescription = null,
@@ -76,11 +86,22 @@ fun MainToolbar(
 
             Spacer(Modifier.weight(1f))
 
+            // Settings button
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                tooltip = { PlainTooltip { Text("Settings (Ctrl+,)") } },
+                state = rememberTooltipState(),
+            ) {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.Default.Settings, "Settings")
+                }
+            }
+
             // Connection indicator
             if (connectionName != null) {
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.large,
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -91,12 +112,12 @@ fun MainToolbar(
                             Icons.Default.Storage,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                         Text(
                             connectionName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
                 }
