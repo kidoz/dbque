@@ -94,18 +94,26 @@ class SqlValidator(
     fun validate(sql: String): ValidationResult {
         val issues = mutableListOf<ValidationIssue>()
 
+        // Check if this looks like a DDL statement that we don't parse
+        val trimmedSql = sql.trim().uppercase()
+        val isDdlStatement = DDL_KEYWORDS.any { trimmedSql.startsWith(it) }
+
         // Parse
         val parseResult = SqlParser.parse(sql, dialect)
         if (parseResult.isFailure) {
-            val error = parseResult.exceptionOrNull()
-            issues.add(
-                ValidationIssue(
-                    message = "Syntax error: ${error?.message ?: "Unknown error"}",
-                    severity = IssueSeverity.ERROR,
-                    position = SourcePosition(0, sql.length),
-                    code = "SQL001",
-                ),
-            )
+            // Don't report errors for DDL statements - our parser doesn't support them
+            // but they are valid SQL that the database can execute
+            if (!isDdlStatement) {
+                val error = parseResult.exceptionOrNull()
+                issues.add(
+                    ValidationIssue(
+                        message = "Syntax error: ${error?.message ?: "Unknown error"}",
+                        severity = IssueSeverity.ERROR,
+                        position = SourcePosition(0, sql.length),
+                        code = "SQL001",
+                    ),
+                )
+            }
             return ValidationResult(issues, null)
         }
 
@@ -115,6 +123,54 @@ class SqlValidator(
         validateStatement(ast, issues)
 
         return ValidationResult(issues, ast)
+    }
+
+    companion object {
+        // DDL keywords that we don't parse but are valid SQL
+        private val DDL_KEYWORDS =
+            setOf(
+                "CREATE",
+                "ALTER",
+                "DROP",
+                "TRUNCATE",
+                "COMMENT",
+                "RENAME",
+                "GRANT",
+                "REVOKE",
+                "BEGIN",
+                "COMMIT",
+                "ROLLBACK",
+                "SAVEPOINT",
+                "SET",
+                "SHOW",
+                "DESCRIBE",
+                "EXPLAIN",
+                "ANALYZE",
+                "VACUUM",
+                "REINDEX",
+                "CLUSTER",
+                "COPY",
+                "LOCK",
+                "UNLOCK",
+                "CALL",
+                "EXECUTE",
+                "PREPARE",
+                "DEALLOCATE",
+                "DECLARE",
+                "FETCH",
+                "CLOSE",
+                "LISTEN",
+                "NOTIFY",
+                "UNLISTEN",
+                "LOAD",
+                "RESET",
+                "DISCARD",
+                "REFRESH",
+                "IMPORT",
+                "DO",
+                "WITH",
+                "MERGE",
+            )
     }
 
     private fun validateStatement(
