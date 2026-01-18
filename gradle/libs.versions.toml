@@ -37,7 +37,7 @@ mockk = "1.13.13"
 turbine = "1.2.0"
 
 # Code Quality
-ktlint = "12.1.2"
+ktlint = "14.0.1"
 ktlint-lib = "1.5.0"
 detekt = "1.23.8"
 

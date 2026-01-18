@@ -35,45 +35,45 @@ class QueryPlanViewModel(
             updateState { copy(isLoading = true, error = null, query = query) }
 
             try {
-                val conn = activeConnection.getConnection()
                 val dbType = activeConnection.config.type
-
                 val explainQuery = buildExplainQuery(query, dbType, analyze)
 
                 withContext(Dispatchers.IO) {
-                    conn.createStatement().use { stmt ->
-                        stmt.executeQuery(explainQuery).use { rs ->
-                            val rawPlan = StringBuilder()
-                            val rows = mutableListOf<List<Any?>>()
+                    activeConnection.getConnection().use { conn ->
+                        conn.createStatement().use { stmt ->
+                            stmt.executeQuery(explainQuery).use { rs ->
+                                val rawPlan = StringBuilder()
+                                val rows = mutableListOf<List<Any?>>()
 
-                            val columnCount = rs.metaData.columnCount
-                            while (rs.next()) {
-                                val row = (1..columnCount).map { rs.getObject(it) }
-                                rows.add(row)
-                                rawPlan.appendLine(row.joinToString(" | ") { it?.toString() ?: "" })
-                            }
-
-                            val nodes =
-                                when (dbType) {
-                                    DatabaseType.POSTGRESQL -> {
-                                        // PostgreSQL with JSON format
-                                        val jsonPlan = rows.firstOrNull()?.firstOrNull()?.toString() ?: "[]"
-                                        parser.parsePostgresPlan(jsonPlan)
-                                    }
-                                    DatabaseType.MYSQL -> {
-                                        parser.parseMySqlPlan(rows)
-                                    }
-                                    else -> {
-                                        parser.parseGenericPlan(rawPlan.toString())
-                                    }
+                                val columnCount = rs.metaData.columnCount
+                                while (rs.next()) {
+                                    val row = (1..columnCount).map { rs.getObject(it) }
+                                    rows.add(row)
+                                    rawPlan.appendLine(row.joinToString(" | ") { it?.toString() ?: "" })
                                 }
 
-                            updateState {
-                                copy(
-                                    planNodes = nodes,
-                                    rawPlan = rawPlan.toString(),
-                                    isLoading = false,
-                                )
+                                val nodes =
+                                    when (dbType) {
+                                        DatabaseType.POSTGRESQL -> {
+                                            // PostgreSQL with JSON format
+                                            val jsonPlan = rows.firstOrNull()?.firstOrNull()?.toString() ?: "[]"
+                                            parser.parsePostgresPlan(jsonPlan)
+                                        }
+                                        DatabaseType.MYSQL -> {
+                                            parser.parseMySqlPlan(rows)
+                                        }
+                                        else -> {
+                                            parser.parseGenericPlan(rawPlan.toString())
+                                        }
+                                    }
+
+                                updateState {
+                                    copy(
+                                        planNodes = nodes,
+                                        rawPlan = rawPlan.toString(),
+                                        isLoading = false,
+                                    )
+                                }
                             }
                         }
                     }

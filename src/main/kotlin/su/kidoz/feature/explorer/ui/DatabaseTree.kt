@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import su.kidoz.core.model.DatabaseCategory
 import su.kidoz.core.model.DatabaseTerminology
+import su.kidoz.core.model.SchemaInfo
 import su.kidoz.feature.explorer.*
 import su.kidoz.ui.theme.DBQueTheme
 
@@ -98,44 +99,299 @@ fun DatabaseTree(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Tables/Collections/Indices folder
-                item {
-                    TreeNodeItem(
-                        node = TreeNode.TablesFolder(null, null),
-                        isExpanded = state.expandedNodes.contains("tables::"),
-                        isSelected = false,
-                        level = 0,
-                        onToggle = { onEvent(ExplorerEvent.ToggleNode("tables::")) },
-                        onSelect = {},
-                        onEvent = onEvent,
-                        terminology = terminology,
-                    )
-                }
+                // Render schema-based hierarchy if schemas exist
+                if (state.usesSchemas && state.schemas.isNotEmpty()) {
+                    // Schema-based tree for PostgreSQL, MySQL, etc.
+                    state.schemas.forEach { schema ->
+                        val schemaNodeId = "schema::${schema.name}"
+                        val isSchemaExpanded = state.expandedNodes.contains(schemaNodeId)
+                        val isSchemaLoading = state.isSchemaLoading(schema.name)
 
-                if (state.expandedNodes.contains("tables::")) {
-                    items(state.tables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                        item(key = schemaNodeId) {
+                            SchemaNodeItem(
+                                schema = schema,
+                                isExpanded = isSchemaExpanded,
+                                isLoading = isSchemaLoading,
+                                isDefault = schema.name == state.defaultSchema,
+                                onToggle = {
+                                    if (isSchemaExpanded) {
+                                        onEvent(ExplorerEvent.CollapseSchema(schema.name))
+                                    } else {
+                                        onEvent(ExplorerEvent.ExpandSchema(schema.name))
+                                    }
+                                },
+                            )
+                        }
+
+                        if (isSchemaExpanded) {
+                            val schemaTables = state.getTablesForSchema(schema.name)
+                            val schemaViews = state.getViewsForSchema(schema.name)
+
+                            // Tables folder under schema
+                            item(key = "tables:${schema.name}") {
+                                TreeNodeItem(
+                                    node = TreeNode.TablesFolder(schema.name, null),
+                                    isExpanded = state.expandedNodes.contains("tables::${schema.name}"),
+                                    isSelected = false,
+                                    level = 1,
+                                    onToggle = { onEvent(ExplorerEvent.ToggleNode("tables::${schema.name}")) },
+                                    onSelect = {},
+                                    onEvent = onEvent,
+                                    terminology = terminology,
+                                    itemCount = schemaTables.size,
+                                )
+                            }
+
+                            if (state.expandedNodes.contains("tables::${schema.name}")) {
+                                items(schemaTables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                                    val selectedTable = (state.selectedNode as? TreeNode.TableNode)?.table
+                                    TreeNodeItem(
+                                        node = TreeNode.TableNode(table),
+                                        isExpanded = state.expandedNodes.contains("table:${table.schema}:${table.name}"),
+                                        isSelected =
+                                            selectedTable != null &&
+                                                selectedTable.name == table.name &&
+                                                selectedTable.schema == table.schema,
+                                        level = 2,
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
+                                        onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                                        onEvent = onEvent,
+                                        terminology = terminology,
+                                    )
+
+                                    // Show Columns and Indexes folders when table is expanded
+                                    if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
+                                        val details =
+                                            state.tableDetails?.takeIf {
+                                                it.table.name == table.name && it.table.schema == table.schema
+                                            }
+
+                                        // Columns folder
+                                        val columnsFolderId = "columns:${table.schema}:${table.name}"
+                                        TreeNodeItem(
+                                            node = TreeNode.ColumnsFolder(table.name, table.schema),
+                                            isExpanded = state.expandedNodes.contains(columnsFolderId),
+                                            isSelected = false,
+                                            level = 3,
+                                            onToggle = { onEvent(ExplorerEvent.ToggleNode(columnsFolderId)) },
+                                            onSelect = {},
+                                            onEvent = onEvent,
+                                            terminology = terminology,
+                                            itemCount = details?.columns?.size,
+                                        )
+
+                                        // Show columns when Columns folder is expanded
+                                        if (state.expandedNodes.contains(columnsFolderId)) {
+                                            details?.columns?.forEach { column ->
+                                                TreeNodeItem(
+                                                    node = TreeNode.ColumnNode(column, table.name),
+                                                    isExpanded = false,
+                                                    isSelected = false,
+                                                    level = 4,
+                                                    onToggle = {},
+                                                    onSelect = {},
+                                                    onEvent = onEvent,
+                                                    terminology = terminology,
+                                                )
+                                            }
+                                        }
+
+                                        // Indexes folder (only if there are indexes)
+                                        if (details?.indexes?.isNotEmpty() == true) {
+                                            val indexesFolderId = "indexes:${table.schema}:${table.name}"
+                                            TreeNodeItem(
+                                                node = TreeNode.IndexesFolder(table.name, table.schema),
+                                                isExpanded = state.expandedNodes.contains(indexesFolderId),
+                                                isSelected = false,
+                                                level = 3,
+                                                onToggle = { onEvent(ExplorerEvent.ToggleNode(indexesFolderId)) },
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                                itemCount = details.indexes.size,
+                                            )
+
+                                            // Show indexes when Indexes folder is expanded
+                                            if (state.expandedNodes.contains(indexesFolderId)) {
+                                                details.indexes.forEach { index ->
+                                                    TreeNodeItem(
+                                                        node = TreeNode.IndexNode(index, table.name),
+                                                        isExpanded = false,
+                                                        isSelected = false,
+                                                        level = 4,
+                                                        onToggle = {},
+                                                        onSelect = {},
+                                                        onEvent = onEvent,
+                                                        terminology = terminology,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Views folder under schema (if views exist)
+                            if (schemaViews.isNotEmpty() && terminology?.supportsViews != false) {
+                                item(key = "views:${schema.name}") {
+                                    TreeNodeItem(
+                                        node = TreeNode.ViewsFolder(schema.name, null),
+                                        isExpanded = state.expandedNodes.contains("views::${schema.name}"),
+                                        isSelected = false,
+                                        level = 1,
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode("views::${schema.name}")) },
+                                        onSelect = {},
+                                        onEvent = onEvent,
+                                        terminology = terminology,
+                                        itemCount = schemaViews.size,
+                                    )
+                                }
+
+                                if (state.expandedNodes.contains("views::${schema.name}")) {
+                                    items(schemaViews, key = { "view:${it.schema}:${it.name}" }) { view ->
+                                        val selectedView = (state.selectedNode as? TreeNode.ViewNode)?.view
+                                        TreeNodeItem(
+                                            node = TreeNode.ViewNode(view),
+                                            isExpanded = false,
+                                            isSelected =
+                                                selectedView != null &&
+                                                    selectedView.name == view.name &&
+                                                    selectedView.schema == view.schema,
+                                            level = 2,
+                                            onToggle = {},
+                                            onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(view))) },
+                                            onEvent = onEvent,
+                                            terminology = terminology,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Flat tree for SQLite, MongoDB, Elasticsearch
+                    // Tables/Collections/Indices folder
+                    item {
                         TreeNodeItem(
-                            node = TreeNode.TableNode(table),
-                            isExpanded = state.expandedNodes.contains("table:${table.schema}:${table.name}"),
-                            isSelected = (state.selectedNode as? TreeNode.TableNode)?.table?.name == table.name,
-                            level = 1,
-                            onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
-                            onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                            node = TreeNode.TablesFolder(null, null),
+                            isExpanded = state.expandedNodes.contains("tables::"),
+                            isSelected = false,
+                            level = 0,
+                            onToggle = { onEvent(ExplorerEvent.ToggleNode("tables::")) },
+                            onSelect = {},
                             onEvent = onEvent,
                             terminology = terminology,
+                            itemCount = state.tables.size,
                         )
+                    }
 
-                        // Show columns/fields when table is expanded
-                        if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
-                            val details = state.tableDetails?.takeIf { it.table.name == table.name }
-                            details?.columns?.forEach { column ->
+                    if (state.expandedNodes.contains("tables::")) {
+                        items(state.tables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                            TreeNodeItem(
+                                node = TreeNode.TableNode(table),
+                                isExpanded = state.expandedNodes.contains("table:${table.schema}:${table.name}"),
+                                isSelected = (state.selectedNode as? TreeNode.TableNode)?.table?.name == table.name,
+                                level = 1,
+                                onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
+                                onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                                onEvent = onEvent,
+                                terminology = terminology,
+                            )
+
+                            // Show Columns and Indexes folders when table is expanded
+                            if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
+                                val details = state.tableDetails?.takeIf { it.table.name == table.name }
+
+                                // Columns folder
+                                val columnsFolderId = "columns:${table.schema ?: ""}:${table.name}"
                                 TreeNodeItem(
-                                    node = TreeNode.ColumnNode(column, table.name),
-                                    isExpanded = false,
+                                    node = TreeNode.ColumnsFolder(table.name, table.schema),
+                                    isExpanded = state.expandedNodes.contains(columnsFolderId),
                                     isSelected = false,
                                     level = 2,
-                                    onToggle = {},
+                                    onToggle = { onEvent(ExplorerEvent.ToggleNode(columnsFolderId)) },
                                     onSelect = {},
+                                    onEvent = onEvent,
+                                    terminology = terminology,
+                                    itemCount = details?.columns?.size,
+                                )
+
+                                // Show columns when Columns folder is expanded
+                                if (state.expandedNodes.contains(columnsFolderId)) {
+                                    details?.columns?.forEach { column ->
+                                        TreeNodeItem(
+                                            node = TreeNode.ColumnNode(column, table.name),
+                                            isExpanded = false,
+                                            isSelected = false,
+                                            level = 3,
+                                            onToggle = {},
+                                            onSelect = {},
+                                            onEvent = onEvent,
+                                            terminology = terminology,
+                                        )
+                                    }
+                                }
+
+                                // Indexes folder (only if there are indexes)
+                                if (details?.indexes?.isNotEmpty() == true) {
+                                    val indexesFolderId = "indexes:${table.schema ?: ""}:${table.name}"
+                                    TreeNodeItem(
+                                        node = TreeNode.IndexesFolder(table.name, table.schema),
+                                        isExpanded = state.expandedNodes.contains(indexesFolderId),
+                                        isSelected = false,
+                                        level = 2,
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode(indexesFolderId)) },
+                                        onSelect = {},
+                                        onEvent = onEvent,
+                                        terminology = terminology,
+                                        itemCount = details.indexes.size,
+                                    )
+
+                                    // Show indexes when Indexes folder is expanded
+                                    if (state.expandedNodes.contains(indexesFolderId)) {
+                                        details.indexes.forEach { index ->
+                                            TreeNodeItem(
+                                                node = TreeNode.IndexNode(index, table.name),
+                                                isExpanded = false,
+                                                isSelected = false,
+                                                level = 3,
+                                                onToggle = {},
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Views folder (only for databases that support views)
+                    if (state.views.isNotEmpty() && terminology?.supportsViews != false) {
+                        item {
+                            TreeNodeItem(
+                                node = TreeNode.ViewsFolder(null, null),
+                                isExpanded = state.expandedNodes.contains("views::"),
+                                isSelected = false,
+                                level = 0,
+                                onToggle = { onEvent(ExplorerEvent.ToggleNode("views::")) },
+                                onSelect = {},
+                                onEvent = onEvent,
+                                terminology = terminology,
+                                itemCount = state.views.size,
+                            )
+                        }
+
+                        if (state.expandedNodes.contains("views::")) {
+                            items(state.views, key = { "view:${it.schema}:${it.name}" }) { view ->
+                                TreeNodeItem(
+                                    node = TreeNode.ViewNode(view),
+                                    isExpanded = false,
+                                    isSelected = (state.selectedNode as? TreeNode.ViewNode)?.view?.name == view.name,
+                                    level = 1,
+                                    onToggle = {},
+                                    onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(view))) },
                                     onEvent = onEvent,
                                     terminology = terminology,
                                 )
@@ -143,38 +399,68 @@ fun DatabaseTree(
                         }
                     }
                 }
-
-                // Views folder (only for databases that support views)
-                if (state.views.isNotEmpty() && terminology?.supportsViews != false) {
-                    item {
-                        TreeNodeItem(
-                            node = TreeNode.ViewsFolder(null, null),
-                            isExpanded = state.expandedNodes.contains("views::"),
-                            isSelected = false,
-                            level = 0,
-                            onToggle = { onEvent(ExplorerEvent.ToggleNode("views::")) },
-                            onSelect = {},
-                            onEvent = onEvent,
-                            terminology = terminology,
-                        )
-                    }
-
-                    if (state.expandedNodes.contains("views::")) {
-                        items(state.views, key = { "view:${it.schema}:${it.name}" }) { view ->
-                            TreeNodeItem(
-                                node = TreeNode.ViewNode(view),
-                                isExpanded = false,
-                                isSelected = (state.selectedNode as? TreeNode.ViewNode)?.view?.name == view.name,
-                                level = 1,
-                                onToggle = {},
-                                onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(view))) },
-                                onEvent = onEvent,
-                                terminology = terminology,
-                            )
-                        }
-                    }
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun SchemaNodeItem(
+    schema: SchemaInfo,
+    isExpanded: Boolean,
+    isLoading: Boolean,
+    isDefault: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // Expand/collapse icon
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 1.5.dp,
+            )
+        } else {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Schema icon
+        Icon(
+            imageVector = Icons.Default.Schema,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        // Schema name
+        Text(
+            text = schema.name,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isDefault) androidx.compose.ui.text.font.FontWeight.Bold else null,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+
+        // Default indicator
+        if (isDefault) {
+            Text(
+                text = "default",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
@@ -189,6 +475,7 @@ private fun TreeNodeItem(
     onSelect: () -> Unit,
     onEvent: (ExplorerEvent) -> Unit,
     terminology: DatabaseTerminology? = null,
+    itemCount: Int? = null,
 ) {
     val contextMenuItems =
         remember(node, terminology) {
@@ -242,6 +529,15 @@ private fun TreeNodeItem(
                 modifier = Modifier.weight(1f),
             )
 
+            // Item count for folders
+            if (itemCount != null && node.type == TreeNodeType.FOLDER) {
+                Text(
+                    text = "($itemCount)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             // Additional info
             getNodeSuffix(node)?.let { suffix ->
                 Text(
@@ -258,6 +554,7 @@ private fun canExpand(node: TreeNode): Boolean =
     when (node) {
         is TreeNode.DatabaseNode, is TreeNode.SchemaNode,
         is TreeNode.TablesFolder, is TreeNode.ViewsFolder,
+        is TreeNode.ColumnsFolder, is TreeNode.IndexesFolder,
         is TreeNode.TableNode,
         -> true
         else -> false
@@ -277,6 +574,8 @@ private fun getNodeIcon(
                 else -> Icons.Default.TableChart
             }
         is TreeNode.ViewsFolder -> Icons.AutoMirrored.Filled.ViewList
+        is TreeNode.ColumnsFolder -> Icons.Default.ViewColumn
+        is TreeNode.IndexesFolder -> Icons.AutoMirrored.Filled.Sort
         is TreeNode.TableNode ->
             when (terminology?.category) {
                 DatabaseCategory.DOCUMENT -> Icons.Default.Description
@@ -291,7 +590,9 @@ private fun getNodeIcon(
 @Composable
 private fun getNodeColor(node: TreeNode): androidx.compose.ui.graphics.Color =
     when (node) {
-        is TreeNode.TablesFolder, is TreeNode.ViewsFolder -> DBQueTheme.extendedColors.treeFolder
+        is TreeNode.TablesFolder, is TreeNode.ViewsFolder,
+        is TreeNode.ColumnsFolder, is TreeNode.IndexesFolder,
+        -> DBQueTheme.extendedColors.treeFolder
         is TreeNode.TableNode -> DBQueTheme.extendedColors.treeTable
         is TreeNode.ViewNode -> DBQueTheme.extendedColors.treeView
         is TreeNode.ColumnNode -> DBQueTheme.extendedColors.treeColumn
@@ -309,6 +610,10 @@ private fun getNodeDisplayText(
             val pk = if (node.column.autoIncrement) " PK" else ""
             val nullable = if (node.column.nullable) "" else " NOT NULL"
             "${node.name} : ${node.column.typeDisplay}$pk$nullable"
+        }
+        is TreeNode.IndexNode -> {
+            val columns = node.index.columns.joinToString(", ")
+            "${node.name} ($columns)"
         }
         else -> node.name
     }

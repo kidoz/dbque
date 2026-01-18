@@ -23,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
@@ -60,7 +59,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorTab
 import su.kidoz.feature.editor.QuerySplitter
@@ -305,16 +303,6 @@ fun SqlEditor(
                 }
             }
         }
-
-        // Validation issues panel - clickable to navigate
-        if (validationIssues.isNotEmpty()) {
-            ValidationIssuesPanel(
-                issues = validationIssues,
-                onIssueClick = { issue -> onEvent(EditorEvent.NavigateToIssue(issue)) },
-                onQuickFix = { issue -> onEvent(EditorEvent.ShowQuickFixes(issue)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
     }
 
     LaunchedEffect(tab.id) {
@@ -539,89 +527,6 @@ private fun EditorToolbar(
                 text = "Ctrl+E: Run | Alt+Enter: Quick Fix",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            )
-        }
-    }
-}
-
-/**
- * Panel showing validation issues with click-to-navigate
- */
-@Composable
-private fun ValidationIssuesPanel(
-    issues: List<ValidationIssue>,
-    onIssueClick: (ValidationIssue) -> Unit,
-    onQuickFix: (ValidationIssue) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(8.dp),
-    ) {
-        Text(
-            text = "Issues (${issues.size})",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-
-        issues.take(5).forEach { issue ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onIssueClick(issue) }
-                        .padding(vertical = 2.dp),
-            ) {
-                Icon(
-                    imageVector =
-                        when (issue.severity) {
-                            IssueSeverity.ERROR -> Icons.Default.Error
-                            IssueSeverity.WARNING -> Icons.Default.Warning
-                            else -> Icons.Default.Info
-                        },
-                    contentDescription = issue.severity.name,
-                    tint = IssueColors.forSeverity(issue.severity),
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "[${issue.code}] ${issue.message}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    issue.suggestion?.let { suggestion ->
-                        Text(
-                            text = suggestion,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        )
-                    }
-                }
-                // Quick-fix button
-                TextButton(
-                    onClick = { onQuickFix(issue) },
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                ) {
-                    Text(
-                        text = "Fix",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-
-        if (issues.size > 5) {
-            Text(
-                text = "... and ${issues.size - 5} more",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

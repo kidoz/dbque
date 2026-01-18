@@ -138,15 +138,16 @@ class AutocompleteProvider(
 
             try {
                 val driver = connection.driver
-                val conn = connection.getConnection()
-                val defaultSchema = driver.getDefaultSchema(conn)
+                connection.getConnection().use { conn ->
+                    val defaultSchema = driver.getDefaultSchema(conn)
 
-                cachedTables = driver.getTables(conn, defaultSchema)
-                cachedColumns =
-                    cachedTables.associate { table ->
-                        table.name to driver.getColumns(conn, table.name, table.schema)
-                    }
-                lastConnectionId = connectionId
+                    cachedTables = driver.getTables(conn, defaultSchema)
+                    cachedColumns =
+                        cachedTables.associate { table ->
+                            table.name to driver.getColumns(conn, table.name, table.schema)
+                        }
+                    lastConnectionId = connectionId
+                }
 
                 logger.debug { "Autocomplete cache refreshed: ${cachedTables.size} tables" }
             } catch (e: Exception) {

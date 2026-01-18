@@ -62,6 +62,69 @@ data class DatabaseVersion(
 }
 
 // ============================================================================
+// Error Message Formatting
+// ============================================================================
+
+/**
+ * Format a user-friendly error message from parser exceptions.
+ * Hides internal parser implementation details (AlternativesFailure, UnexpectedEof, etc.)
+ */
+private fun formatParseErrorMessage(
+    error: Throwable?,
+    queryType: String,
+): String {
+    if (error == null) return "Could not parse $queryType query"
+
+    val message = error.message ?: return "Could not parse $queryType query"
+
+    // Extract position information if available (e.g., "at 0 (1:1)" or "at position 10")
+    val positionRegex = Regex("""at (\d+) \((\d+):(\d+)\)""")
+    val positionMatch = positionRegex.find(message)
+    val positionInfo =
+        if (positionMatch != null) {
+            val (_, line, col) = positionMatch.destructured
+            " at line $line, column $col"
+        } else {
+            ""
+        }
+
+    // Check for specific error patterns and provide user-friendly messages
+    return when {
+        // Mismatched token - extract what was expected and found
+        message.contains("MismatchedToken") -> {
+            val mismatchRegex = Regex("""expected=\s*\(([^)]+)\).*?found=(\w+)""")
+            val match = mismatchRegex.find(message)
+            if (match != null) {
+                val (expected, found) = match.destructured
+                "Unexpected token '$found', expected '$expected'$positionInfo"
+            } else {
+                "Syntax error: unexpected token$positionInfo"
+            }
+        }
+        // Unexpected end of input
+        message.contains("UnexpectedEof") -> {
+            "Syntax error: unexpected end of input, query may be incomplete$positionInfo"
+        }
+        // Could not parse - alternatives failure
+        message.contains("AlternativesFailure") || message.contains("Could not parse") -> {
+            "Syntax error: could not parse $queryType query$positionInfo"
+        }
+        // No tokens matched
+        message.contains("NoMatchingToken") -> {
+            "Syntax error: unrecognized character or token$positionInfo"
+        }
+        // Generic fallback - don't expose internal details
+        message.length > 100 -> {
+            "Syntax error in $queryType query$positionInfo"
+        }
+        else -> {
+            // For short, simple messages, use them directly
+            "Syntax error: ${message.take(80)}"
+        }
+    }
+}
+
+// ============================================================================
 // SQL Validator
 // ============================================================================
 
@@ -107,7 +170,7 @@ class SqlValidator(
                 val error = parseResult.exceptionOrNull()
                 issues.add(
                     ValidationIssue(
-                        message = "Syntax error: ${error?.message ?: "Unknown error"}",
+                        message = formatParseErrorMessage(error, "SQL"),
                         severity = IssueSeverity.ERROR,
                         position = SourcePosition(0, sql.length),
                         code = "SQL001",
@@ -563,7 +626,7 @@ class MongoValidator(
             val error = parseResult.exceptionOrNull()
             issues.add(
                 ValidationIssue(
-                    message = "Parse error: ${error?.message ?: "Unknown error"}",
+                    message = formatParseErrorMessage(error, "MongoDB"),
                     severity = IssueSeverity.ERROR,
                     position = SourcePosition(0, query.length),
                     code = "MONGO001",
@@ -1246,7 +1309,7 @@ class ElasticsearchValidator(
             val error = parseResult.exceptionOrNull()
             issues.add(
                 ValidationIssue(
-                    message = "Parse error: ${error?.message ?: "Unknown error"}",
+                    message = formatParseErrorMessage(error, "Elasticsearch"),
                     severity = IssueSeverity.ERROR,
                     position = SourcePosition(0, query.length),
                     code = "ES001",

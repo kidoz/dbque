@@ -28,6 +28,7 @@ import su.kidoz.feature.editor.EditorEffect
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorViewModel
 import su.kidoz.feature.editor.ui.EditorTabs
+import su.kidoz.feature.editor.ui.IssuesPanel
 import su.kidoz.feature.editor.ui.SqlEditor
 import su.kidoz.feature.explorer.ExplorerEffect
 import su.kidoz.feature.explorer.ExplorerEvent
@@ -61,6 +62,7 @@ private enum class ResultsTab(
 ) {
     Results("Results"),
     QueryPlan("Query Plan"),
+    Issues("Issues"),
     History("History"),
 }
 
@@ -215,9 +217,9 @@ fun MainWindow() {
             val tabs =
                 remember(isCompact) {
                     if (isCompact) {
-                        listOf(ResultsTab.Results, ResultsTab.QueryPlan, ResultsTab.History)
+                        listOf(ResultsTab.Results, ResultsTab.QueryPlan, ResultsTab.Issues, ResultsTab.History)
                     } else {
-                        listOf(ResultsTab.Results, ResultsTab.QueryPlan)
+                        listOf(ResultsTab.Results, ResultsTab.QueryPlan, ResultsTab.Issues)
                     }
                 }
 
@@ -319,6 +321,20 @@ fun MainWindow() {
                                                     state = queryPlanState,
                                                     onEvent = queryPlanViewModel::onEvent,
                                                     maxCost = maxCost,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                            ResultsTab.Issues -> {
+                                                val activeTab = editorState.activeTab
+                                                IssuesPanel(
+                                                    issues = activeTab?.validationIssues ?: emptyList(),
+                                                    content = activeTab?.content ?: "",
+                                                    onIssueClick = { issue ->
+                                                        editorViewModel.onEvent(EditorEvent.NavigateToIssue(issue))
+                                                    },
+                                                    onQuickFix = { issue ->
+                                                        editorViewModel.onEvent(EditorEvent.ShowQuickFixes(issue))
+                                                    },
                                                     modifier = Modifier.fillMaxSize(),
                                                 )
                                             }

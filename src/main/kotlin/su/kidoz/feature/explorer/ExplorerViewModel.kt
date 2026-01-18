@@ -43,6 +43,10 @@ class ExplorerViewModel(
             is ExplorerEvent.GenerateSelect -> generateSelect(event.tableName, event.schema)
             is ExplorerEvent.GenerateInsert -> generateInsert(event.tableName, event.schema)
             is ExplorerEvent.GenerateDdl -> generateDdl(event.tableName, event.schema)
+            // Schema navigation
+            is ExplorerEvent.LoadSchemaContents -> loadSchemaContents(event.schemaName)
+            is ExplorerEvent.ExpandSchema -> expandSchema(event.schemaName)
+            is ExplorerEvent.CollapseSchema -> collapseSchema(event.schemaName)
             // Elasticsearch index management
             is ExplorerEvent.ShowCreateIndexDialog -> showCreateIndexDialog()
             is ExplorerEvent.ShowEditIndexSettingsDialog -> showEditIndexSettingsDialog(event.indexName)
@@ -79,29 +83,51 @@ class ExplorerViewModel(
     }
 
     private suspend fun loadJdbcMetadata(activeConnection: su.kidoz.database.ActiveConnection) {
-        val connection = activeConnection.getConnection()
         val driver = activeConnection.driver
 
-        val schemas = driver.getSchemas(connection)
-        val defaultSchema = driver.getDefaultSchema(connection)
+        activeConnection.getConnection().use { connection ->
+            val schemas = driver.getSchemas(connection)
+            val defaultSchema = driver.getDefaultSchema(connection)
 
-        // Load tables and views for default schema
-        val tables = driver.getTables(connection, defaultSchema)
-        val views = driver.getViews(connection, defaultSchema)
+            // For databases with schemas, set up the schema list and load default schema
+            if (schemas.isNotEmpty()) {
+                // Load tables and views for default schema
+                val schemaToLoad = defaultSchema ?: schemas.first().name
+                val tables = driver.getTables(connection, schemaToLoad)
+                val views = driver.getViews(connection, schemaToLoad)
 
-        updateState {
-            copy(
-                schemas = schemas,
-                tables = tables,
-                views = views,
-                isLoading = false,
-                expandedNodes =
-                    if (schemas.isNotEmpty()) {
-                        setOf("schema::${defaultSchema ?: schemas.first().name}")
-                    } else {
-                        emptySet()
-                    },
-            )
+                updateState {
+                    copy(
+                        schemas = schemas,
+                        tables = tables, // Keep for backward compatibility
+                        views = views,
+                        tablesBySchema = mapOf(schemaToLoad to tables),
+                        viewsBySchema = mapOf(schemaToLoad to views),
+                        loadedSchemas = setOf(schemaToLoad),
+                        defaultSchema = schemaToLoad,
+                        isLoading = false,
+                        expandedNodes = setOf("schema::$schemaToLoad"),
+                    )
+                }
+            } else {
+                // No schemas (e.g., SQLite) - load all tables directly
+                val tables = driver.getTables(connection, null)
+                val views = driver.getViews(connection, null)
+
+                updateState {
+                    copy(
+                        schemas = emptyList(),
+                        tables = tables,
+                        views = views,
+                        tablesBySchema = emptyMap(),
+                        viewsBySchema = emptyMap(),
+                        loadedSchemas = emptySet(),
+                        defaultSchema = null,
+                        isLoading = false,
+                        expandedNodes = emptySet(),
+                    )
+                }
+            }
         }
     }
 
@@ -140,6 +166,8 @@ class ExplorerViewModel(
     }
 
     private fun toggleNode(nodeId: String) {
+        val isExpanding = !currentState.expandedNodes.contains(nodeId)
+
         updateState {
             copy(
                 expandedNodes =
@@ -149,6 +177,77 @@ class ExplorerViewModel(
                         expandedNodes + nodeId
                     },
             )
+        }
+
+        // Load table details when expanding a table node
+        if (isExpanding && nodeId.startsWith("table:")) {
+            val parts = nodeId.removePrefix("table:").split(":", limit = 2)
+            val schema = parts.getOrNull(0)?.takeIf { it.isNotEmpty() }
+            val tableName = parts.getOrNull(1) ?: return
+            loadTableDetails(tableName, schema)
+        }
+    }
+
+    private fun expandSchema(schemaName: String) {
+        val nodeId = "schema::$schemaName"
+
+        // Add to expanded nodes
+        updateState {
+            copy(expandedNodes = expandedNodes + nodeId)
+        }
+
+        // Load contents if not already loaded
+        if (!currentState.isSchemaLoaded(schemaName)) {
+            loadSchemaContents(schemaName)
+        }
+    }
+
+    private fun collapseSchema(schemaName: String) {
+        val nodeId = "schema::$schemaName"
+        updateState {
+            copy(expandedNodes = expandedNodes - nodeId)
+        }
+    }
+
+    private fun loadSchemaContents(schemaName: String) {
+        val activeConnection = connectionManager.activeConnection ?: return
+
+        // Don't reload if already loaded or currently loading
+        if (currentState.isSchemaLoaded(schemaName) || currentState.isSchemaLoading(schemaName)) {
+            return
+        }
+
+        viewModelScope.launch {
+            updateState {
+                copy(loadingSchemas = loadingSchemas + schemaName)
+            }
+
+            try {
+                val driver = activeConnection.driver
+
+                activeConnection.getConnection().use { connection ->
+                    val tables = driver.getTables(connection, schemaName)
+                    val views = driver.getViews(connection, schemaName)
+
+                    updateState {
+                        copy(
+                            tablesBySchema = tablesBySchema + (schemaName to tables),
+                            viewsBySchema = viewsBySchema + (schemaName to views),
+                            loadedSchemas = loadedSchemas + schemaName,
+                            loadingSchemas = loadingSchemas - schemaName,
+                            // Also update flat lists for backward compatibility
+                            tables = (this.tables + tables).distinctBy { "${it.schema}:${it.name}" },
+                            views = (this.views + views).distinctBy { "${it.schema}:${it.name}" },
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load schema contents for $schemaName" }
+                updateState {
+                    copy(loadingSchemas = loadingSchemas - schemaName)
+                }
+                sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load schema"))
+            }
         }
     }
 
@@ -186,29 +285,30 @@ class ExplorerViewModel(
         tableName: String,
         schema: String?,
     ) {
-        val connection = activeConnection.getConnection()
         val driver = activeConnection.driver
 
-        val columns = driver.getColumns(connection, tableName, schema)
-        val pk = driver.getPrimaryKey(connection, tableName, schema)
-        val fks = driver.getForeignKeys(connection, tableName, schema)
-        val indexes = driver.getIndexes(connection, tableName, schema)
+        activeConnection.getConnection().use { connection ->
+            val columns = driver.getColumns(connection, tableName, schema)
+            val pk = driver.getPrimaryKey(connection, tableName, schema)
+            val fks = driver.getForeignKeys(connection, tableName, schema)
+            val indexes = driver.getIndexes(connection, tableName, schema)
 
-        val tableInfo =
-            currentState.tables.find { it.name == tableName && it.schema == schema }
-                ?: return
+            val tableInfo =
+                currentState.tables.find { it.name == tableName && it.schema == schema }
+                    ?: return
 
-        updateState {
-            copy(
-                tableDetails =
-                    TableDetails(
-                        table = tableInfo.copy(columns = columns),
-                        columns = columns,
-                        primaryKey = pk,
-                        foreignKeys = fks,
-                        indexes = indexes,
-                    ),
-            )
+            updateState {
+                copy(
+                    tableDetails =
+                        TableDetails(
+                            table = tableInfo.copy(columns = columns),
+                            columns = columns,
+                            primaryKey = pk,
+                            foreignKeys = fks,
+                            indexes = indexes,
+                        ),
+                )
+            }
         }
     }
 
@@ -289,8 +389,9 @@ class ExplorerViewModel(
                         DatabaseType.MONGODB -> generateMongoSelect(tableName)
                         DatabaseType.ELASTICSEARCH -> generateElasticsearchSelect(tableName)
                         else -> {
-                            val connection = activeConnection.getConnection()
-                            activeConnection.driver.generateSelectStatement(connection, tableName, schema)
+                            activeConnection.getConnection().use { connection ->
+                                activeConnection.driver.generateSelectStatement(connection, tableName, schema)
+                            }
                         }
                     }
                 sendEffect(ExplorerEffect.InsertIntoEditor(sql))
@@ -330,8 +431,9 @@ class ExplorerViewModel(
                         DatabaseType.MONGODB -> generateMongoInsert(tableName)
                         DatabaseType.ELASTICSEARCH -> generateElasticsearchInsert(tableName)
                         else -> {
-                            val connection = activeConnection.getConnection()
-                            activeConnection.driver.generateInsertStatement(connection, tableName, schema)
+                            activeConnection.getConnection().use { connection ->
+                                activeConnection.driver.generateInsertStatement(connection, tableName, schema)
+                            }
                         }
                     }
                 sendEffect(ExplorerEffect.InsertIntoEditor(sql))
@@ -374,8 +476,9 @@ class ExplorerViewModel(
                             driver.getIndexMappingElasticsearch(esConnection, tableName)
                         }
                         else -> {
-                            val connection = activeConnection.getConnection()
-                            activeConnection.driver.generateCreateTableDdl(connection, tableName, schema)
+                            activeConnection.getConnection().use { connection ->
+                                activeConnection.driver.generateCreateTableDdl(connection, tableName, schema)
+                            }
                         }
                     }
                 sendEffect(ExplorerEffect.InsertIntoEditor(sql))

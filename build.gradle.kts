@@ -23,7 +23,9 @@ repositories {
 dependencies {
     // Compose Multiplatform
     implementation(compose.desktop.currentOs)
+    @Suppress("DEPRECATION")
     implementation(compose.material3)
+    @Suppress("DEPRECATION")
     implementation(compose.materialIconsExtended)
 
     // Koin - Dependency Injection (using BOM)

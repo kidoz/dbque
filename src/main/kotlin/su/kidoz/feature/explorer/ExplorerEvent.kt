@@ -42,6 +42,19 @@ sealed interface ExplorerEvent : UiEvent {
         val schema: String?,
     ) : ExplorerEvent
 
+    // Schema navigation
+    data class LoadSchemaContents(
+        val schemaName: String,
+    ) : ExplorerEvent
+
+    data class ExpandSchema(
+        val schemaName: String,
+    ) : ExplorerEvent
+
+    data class CollapseSchema(
+        val schemaName: String,
+    ) : ExplorerEvent
+
     // Elasticsearch index management
     data object ShowCreateIndexDialog : ExplorerEvent
 

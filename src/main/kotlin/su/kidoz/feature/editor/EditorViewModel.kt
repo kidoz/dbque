@@ -437,58 +437,59 @@ class EditorViewModel(
                 var hasError = false
 
                 try {
-                    val connection = activeConnection.getConnection()
-                    val startTime = System.currentTimeMillis()
+                    activeConnection.getConnection().use { connection ->
+                        val startTime = System.currentTimeMillis()
 
-                    for ((index, query) in queries.withIndex()) {
-                        if (!currentState.isExecuting) break // Check if cancelled
+                        for ((index, query) in queries.withIndex()) {
+                            if (!currentState.isExecuting) break // Check if cancelled
 
-                        val execution = QueryExecution(query = query)
-                        when (val result = queryExecutor.execute(connection, execution)) {
-                            is QueryExecutionResult.Success -> {
-                                allResults.add(result.result)
-                                saveToHistory(
-                                    activeConnection.config.id,
-                                    query,
-                                    result.result.executionTimeMs,
-                                    result.result.rowCount,
-                                    true,
-                                    null,
-                                )
-                            }
-                            is QueryExecutionResult.MultiResult -> {
-                                allResults.addAll(result.results)
-                                val totalRows = result.results.sumOf { it.rowCount }
-                                saveToHistory(
-                                    activeConnection.config.id,
-                                    query,
-                                    result.results.sumOf { it.executionTimeMs },
-                                    totalRows,
-                                    true,
-                                    null,
-                                )
-                            }
-                            is QueryExecutionResult.Error -> {
-                                saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
-                                sendEffect(
-                                    EditorEffect.QueryError(
-                                        "Query ${index + 1}/${queries.size} failed: ${result.message}",
-                                    ),
-                                )
-                                hasError = true
-                                break
+                            val execution = QueryExecution(query = query)
+                            when (val result = queryExecutor.execute(connection, execution)) {
+                                is QueryExecutionResult.Success -> {
+                                    allResults.add(result.result)
+                                    saveToHistory(
+                                        activeConnection.config.id,
+                                        query,
+                                        result.result.executionTimeMs,
+                                        result.result.rowCount,
+                                        true,
+                                        null,
+                                    )
+                                }
+                                is QueryExecutionResult.MultiResult -> {
+                                    allResults.addAll(result.results)
+                                    val totalRows = result.results.sumOf { it.rowCount }
+                                    saveToHistory(
+                                        activeConnection.config.id,
+                                        query,
+                                        result.results.sumOf { it.executionTimeMs },
+                                        totalRows,
+                                        true,
+                                        null,
+                                    )
+                                }
+                                is QueryExecutionResult.Error -> {
+                                    saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
+                                    sendEffect(
+                                        EditorEffect.QueryError(
+                                            "Query ${index + 1}/${queries.size} failed: ${result.message}",
+                                        ),
+                                    )
+                                    hasError = true
+                                    break
+                                }
                             }
                         }
-                    }
 
-                    if (!hasError && allResults.isNotEmpty()) {
-                        val totalTime = System.currentTimeMillis() - startTime
-                        sendEffect(EditorEffect.QueryExecuted(allResults))
-                        sendEffect(
-                            EditorEffect.ShowMessage(
-                                "Executed ${allResults.size} queries in ${totalTime}ms",
-                            ),
-                        )
+                        if (!hasError && allResults.isNotEmpty()) {
+                            val totalTime = System.currentTimeMillis() - startTime
+                            sendEffect(EditorEffect.QueryExecuted(allResults))
+                            sendEffect(
+                                EditorEffect.ShowMessage(
+                                    "Executed ${allResults.size} queries in ${totalTime}ms",
+                                ),
+                            )
+                        }
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Query execution failed" }
@@ -512,31 +513,32 @@ class EditorViewModel(
         executionJob =
             viewModelScope.launch {
                 try {
-                    val connection = activeConnection.getConnection()
-                    val execution = QueryExecution(query = query)
-                    val startTime = System.currentTimeMillis()
+                    activeConnection.getConnection().use { connection ->
+                        val execution = QueryExecution(query = query)
+                        val startTime = System.currentTimeMillis()
 
-                    when (val result = queryExecutor.execute(connection, execution)) {
-                        is QueryExecutionResult.Success -> {
-                            saveToHistory(
-                                activeConnection.config.id,
-                                query,
-                                result.result.executionTimeMs,
-                                result.result.rowCount,
-                                true,
-                                null,
-                            )
-                            sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
-                        }
-                        is QueryExecutionResult.MultiResult -> {
-                            val totalRows = result.results.sumOf { it.rowCount }
-                            val totalTime = System.currentTimeMillis() - startTime
-                            saveToHistory(activeConnection.config.id, query, totalTime, totalRows, true, null)
-                            sendEffect(EditorEffect.QueryExecuted(result.results))
-                        }
-                        is QueryExecutionResult.Error -> {
-                            saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
-                            sendEffect(EditorEffect.QueryError(result.message))
+                        when (val result = queryExecutor.execute(connection, execution)) {
+                            is QueryExecutionResult.Success -> {
+                                saveToHistory(
+                                    activeConnection.config.id,
+                                    query,
+                                    result.result.executionTimeMs,
+                                    result.result.rowCount,
+                                    true,
+                                    null,
+                                )
+                                sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
+                            }
+                            is QueryExecutionResult.MultiResult -> {
+                                val totalRows = result.results.sumOf { it.rowCount }
+                                val totalTime = System.currentTimeMillis() - startTime
+                                saveToHistory(activeConnection.config.id, query, totalTime, totalRows, true, null)
+                                sendEffect(EditorEffect.QueryExecuted(result.results))
+                            }
+                            is QueryExecutionResult.Error -> {
+                                saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
+                                sendEffect(EditorEffect.QueryError(result.message))
+                            }
                         }
                     }
                 } catch (e: Exception) {

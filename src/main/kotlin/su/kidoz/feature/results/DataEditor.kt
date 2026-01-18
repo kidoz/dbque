@@ -33,41 +33,41 @@ class DataEditor(
         result: QueryResult,
     ): Result<Int> =
         withContext(Dispatchers.IO) {
-            val connection =
-                connectionManager.activeConnection?.getConnection()
+            val activeConnection =
+                connectionManager.activeConnection
                     ?: return@withContext Result.failure(Exception("No active connection"))
 
-            val driver =
-                connectionManager.activeConnection?.driver
-                    ?: return@withContext Result.failure(Exception("No driver"))
+            val driver = activeConnection.driver
 
             runCatching {
-                var affectedRows = 0
+                activeConnection.getConnection().use { connection ->
+                    var affectedRows = 0
 
-                changes.edits.groupBy { it.rowIndex }.forEach { (rowIndex, rowEdits) ->
-                    val originalRow =
-                        result.rows.getOrNull(rowIndex)
-                            ?: throw Exception("Row $rowIndex not found")
+                    changes.edits.groupBy { it.rowIndex }.forEach { (rowIndex, rowEdits) ->
+                        val originalRow =
+                            result.rows.getOrNull(rowIndex)
+                                ?: throw Exception("Row $rowIndex not found")
 
-                    val sql =
-                        buildUpdateStatement(
-                            changes.tableName,
-                            changes.schema,
-                            rowEdits,
-                            originalRow,
-                            result.columns,
-                            changes.primaryKeyColumns,
-                            driver::escapeIdentifier,
-                        )
+                        val sql =
+                            buildUpdateStatement(
+                                changes.tableName,
+                                changes.schema,
+                                rowEdits,
+                                originalRow,
+                                result.columns,
+                                changes.primaryKeyColumns,
+                                driver::escapeIdentifier,
+                            )
 
-                    logger.debug { "Executing update: $sql" }
+                        logger.debug { "Executing update: $sql" }
 
-                    connection.createStatement().use { stmt ->
-                        affectedRows += stmt.executeUpdate(sql)
+                        connection.createStatement().use { stmt ->
+                            affectedRows += stmt.executeUpdate(sql)
+                        }
                     }
-                }
 
-                affectedRows
+                    affectedRows
+                }
             }
         }
 
@@ -78,35 +78,35 @@ class DataEditor(
         values: List<Any?>,
     ): Result<Int> =
         withContext(Dispatchers.IO) {
-            val connection =
-                connectionManager.activeConnection?.getConnection()
+            val activeConnection =
+                connectionManager.activeConnection
                     ?: return@withContext Result.failure(Exception("No active connection"))
 
-            val driver =
-                connectionManager.activeConnection?.driver
-                    ?: return@withContext Result.failure(Exception("No driver"))
+            val driver = activeConnection.driver
 
             runCatching {
-                val escapedTable =
-                    if (schema != null) {
-                        "${driver.escapeIdentifier(schema)}.${driver.escapeIdentifier(tableName)}"
-                    } else {
-                        driver.escapeIdentifier(tableName)
+                activeConnection.getConnection().use { connection ->
+                    val escapedTable =
+                        if (schema != null) {
+                            "${driver.escapeIdentifier(schema)}.${driver.escapeIdentifier(tableName)}"
+                        } else {
+                            driver.escapeIdentifier(tableName)
+                        }
+
+                    val columnNames = columns.joinToString(", ") { driver.escapeIdentifier(it.name) }
+                    val valuePlaceholders =
+                        values
+                            .mapIndexed { index, value ->
+                                formatValueForSql(value, columns[index].jdbcType)
+                            }.joinToString(", ")
+
+                    val sql = "INSERT INTO $escapedTable ($columnNames) VALUES ($valuePlaceholders)"
+
+                    logger.debug { "Executing insert: $sql" }
+
+                    connection.createStatement().use { stmt ->
+                        stmt.executeUpdate(sql)
                     }
-
-                val columnNames = columns.joinToString(", ") { driver.escapeIdentifier(it.name) }
-                val valuePlaceholders =
-                    values
-                        .mapIndexed { index, value ->
-                            formatValueForSql(value, columns[index].jdbcType)
-                        }.joinToString(", ")
-
-                val sql = "INSERT INTO $escapedTable ($columnNames) VALUES ($valuePlaceholders)"
-
-                logger.debug { "Executing insert: $sql" }
-
-                connection.createStatement().use { stmt ->
-                    stmt.executeUpdate(sql)
                 }
             }
         }
@@ -119,46 +119,46 @@ class DataEditor(
         primaryKeyColumns: List<Int>,
     ): Result<Int> =
         withContext(Dispatchers.IO) {
-            val connection =
-                connectionManager.activeConnection?.getConnection()
+            val activeConnection =
+                connectionManager.activeConnection
                     ?: return@withContext Result.failure(Exception("No active connection"))
 
-            val driver =
-                connectionManager.activeConnection?.driver
-                    ?: return@withContext Result.failure(Exception("No driver"))
+            val driver = activeConnection.driver
 
             if (primaryKeyColumns.isEmpty()) {
                 return@withContext Result.failure(Exception("No primary key defined - cannot delete rows safely"))
             }
 
             runCatching {
-                var affectedRows = 0
+                activeConnection.getConnection().use { connection ->
+                    var affectedRows = 0
 
-                val escapedTable =
-                    if (schema != null) {
-                        "${driver.escapeIdentifier(schema)}.${driver.escapeIdentifier(tableName)}"
-                    } else {
-                        driver.escapeIdentifier(tableName)
-                    }
-
-                rows.forEach { row ->
-                    val whereClause =
-                        primaryKeyColumns.joinToString(" AND ") { pkIndex ->
-                            val column = columns[pkIndex]
-                            val value = row[pkIndex]
-                            "${driver.escapeIdentifier(column.name)} = ${formatValueForSql(value, column.jdbcType)}"
+                    val escapedTable =
+                        if (schema != null) {
+                            "${driver.escapeIdentifier(schema)}.${driver.escapeIdentifier(tableName)}"
+                        } else {
+                            driver.escapeIdentifier(tableName)
                         }
 
-                    val sql = "DELETE FROM $escapedTable WHERE $whereClause"
+                    rows.forEach { row ->
+                        val whereClause =
+                            primaryKeyColumns.joinToString(" AND ") { pkIndex ->
+                                val column = columns[pkIndex]
+                                val value = row[pkIndex]
+                                "${driver.escapeIdentifier(column.name)} = ${formatValueForSql(value, column.jdbcType)}"
+                            }
 
-                    logger.debug { "Executing delete: $sql" }
+                        val sql = "DELETE FROM $escapedTable WHERE $whereClause"
 
-                    connection.createStatement().use { stmt ->
-                        affectedRows += stmt.executeUpdate(sql)
+                        logger.debug { "Executing delete: $sql" }
+
+                        connection.createStatement().use { stmt ->
+                            affectedRows += stmt.executeUpdate(sql)
+                        }
                     }
-                }
 
-                affectedRows
+                    affectedRows
+                }
             }
         }
 

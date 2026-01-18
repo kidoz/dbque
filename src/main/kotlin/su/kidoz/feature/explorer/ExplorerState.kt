@@ -17,10 +17,32 @@ data class ExplorerState(
     val tableDetails: TableDetails? = null,
     val indexDialogState: ElasticsearchIndexDialogState? = null,
     val deleteConfirmation: DeleteConfirmationState? = null,
+    // Schema-organized data for JDBC databases
+    val tablesBySchema: Map<String, List<TableInfo>> = emptyMap(),
+    val viewsBySchema: Map<String, List<ViewInfo>> = emptyMap(),
+    val loadedSchemas: Set<String> = emptySet(),
+    val loadingSchemas: Set<String> = emptySet(),
+    val defaultSchema: String? = null,
 ) : UiState {
     /** Get the terminology for the current database type */
     val terminology: DatabaseTerminology?
         get() = databaseType?.terminology()
+
+    /** Check if database uses schemas (PostgreSQL, MySQL, etc.) */
+    val usesSchemas: Boolean
+        get() = databaseType in listOf(DatabaseType.POSTGRESQL, DatabaseType.MYSQL, DatabaseType.H2)
+
+    /** Get tables for a specific schema */
+    fun getTablesForSchema(schemaName: String): List<TableInfo> = tablesBySchema[schemaName] ?: emptyList()
+
+    /** Get views for a specific schema */
+    fun getViewsForSchema(schemaName: String): List<ViewInfo> = viewsBySchema[schemaName] ?: emptyList()
+
+    /** Check if a schema's contents have been loaded */
+    fun isSchemaLoaded(schemaName: String): Boolean = loadedSchemas.contains(schemaName)
+
+    /** Check if a schema is currently loading */
+    fun isSchemaLoading(schemaName: String): Boolean = loadingSchemas.contains(schemaName)
 }
 
 data class TableDetails(
@@ -62,6 +84,16 @@ sealed class TreeNode(
     data class ViewNode(
         val view: ViewInfo,
     ) : TreeNode("view:${view.schema ?: ""}:${view.name}", view.name, TreeNodeType.VIEW)
+
+    data class ColumnsFolder(
+        val tableName: String,
+        val schemaName: String?,
+    ) : TreeNode("columns:${schemaName ?: ""}:$tableName", "Columns", TreeNodeType.FOLDER)
+
+    data class IndexesFolder(
+        val tableName: String,
+        val schemaName: String?,
+    ) : TreeNode("indexes:${schemaName ?: ""}:$tableName", "Indexes", TreeNodeType.FOLDER)
 
     data class ColumnNode(
         val column: ColumnInfo,
