@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import su.kidoz.core.model.DatabaseCategory
+import su.kidoz.core.model.DatabaseInfo
 import su.kidoz.core.model.DatabaseTerminology
 import su.kidoz.core.model.SchemaInfo
 import su.kidoz.feature.explorer.*
@@ -99,8 +100,208 @@ fun DatabaseTree(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Render schema-based hierarchy if schemas exist
-                if (state.usesSchemas && state.schemas.isNotEmpty()) {
+                // Render MongoDB database hierarchy
+                if (state.usesDatabaseHierarchy && state.databases.isNotEmpty()) {
+                    state.databases.forEach { database ->
+                        val dbNodeId = "db:${database.name}"
+                        val isDatabaseExpanded = state.expandedNodes.contains(dbNodeId)
+                        val isDatabaseLoading = state.isDatabaseLoading(database.name)
+
+                        item(key = dbNodeId) {
+                            DatabaseNodeItem(
+                                database = database,
+                                isExpanded = isDatabaseExpanded,
+                                isLoading = isDatabaseLoading,
+                                onToggle = {
+                                    if (isDatabaseExpanded) {
+                                        onEvent(ExplorerEvent.CollapseDatabase(database.name))
+                                    } else {
+                                        onEvent(ExplorerEvent.ExpandDatabase(database.name))
+                                    }
+                                },
+                            )
+                        }
+
+                        if (isDatabaseExpanded) {
+                            val collections = state.getCollectionsForDatabase(database.name)
+
+                            items(collections, key = { "collection:${database.name}:${it.name}" }) { collection ->
+                                val collectionNodeId = "collection:${database.name}:${collection.name}"
+                                val isCollectionExpanded = state.expandedNodes.contains(collectionNodeId)
+
+                                TreeNodeItem(
+                                    node = TreeNode.CollectionNode(collection, database.name),
+                                    isExpanded = isCollectionExpanded,
+                                    isSelected = (state.selectedNode as? TreeNode.CollectionNode)?.collection?.name == collection.name,
+                                    level = 1,
+                                    onToggle = { onEvent(ExplorerEvent.ToggleNode(collectionNodeId)) },
+                                    onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.CollectionNode(collection, database.name))) },
+                                    onEvent = onEvent,
+                                    terminology = terminology,
+                                )
+
+                                // Show Fields and Indexes folders when collection is expanded
+                                if (isCollectionExpanded) {
+                                    val details = state.tableDetails?.takeIf { it.table.name == collection.name }
+
+                                    // Fields folder
+                                    val fieldsFolderId = "fields:${database.name}:${collection.name}"
+                                    TreeNodeItem(
+                                        node = TreeNode.FieldsFolder(collection.name, database.name),
+                                        isExpanded = state.expandedNodes.contains(fieldsFolderId),
+                                        isSelected = false,
+                                        level = 2,
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode(fieldsFolderId)) },
+                                        onSelect = {},
+                                        onEvent = onEvent,
+                                        terminology = terminology,
+                                        itemCount = details?.columns?.size,
+                                    )
+
+                                    // Show fields when Fields folder is expanded
+                                    if (state.expandedNodes.contains(fieldsFolderId)) {
+                                        details?.columns?.forEach { column ->
+                                            TreeNodeItem(
+                                                node = TreeNode.ColumnNode(column, collection.name),
+                                                isExpanded = false,
+                                                isSelected = false,
+                                                level = 3,
+                                                onToggle = {},
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                            )
+                                        }
+                                    }
+
+                                    // Indexes folder (only if there are indexes)
+                                    if (details?.indexes?.isNotEmpty() == true) {
+                                        val indexesFolderId = "indexes:${database.name}:${collection.name}"
+                                        TreeNodeItem(
+                                            node = TreeNode.IndexesFolder(collection.name, null),
+                                            isExpanded = state.expandedNodes.contains(indexesFolderId),
+                                            isSelected = false,
+                                            level = 2,
+                                            onToggle = { onEvent(ExplorerEvent.ToggleNode(indexesFolderId)) },
+                                            onSelect = {},
+                                            onEvent = onEvent,
+                                            terminology = terminology,
+                                            itemCount = details.indexes.size,
+                                        )
+
+                                        // Show indexes when Indexes folder is expanded
+                                        if (state.expandedNodes.contains(indexesFolderId)) {
+                                            details.indexes.forEach { index ->
+                                                TreeNodeItem(
+                                                    node = TreeNode.IndexNode(index, collection.name),
+                                                    isExpanded = false,
+                                                    isSelected = false,
+                                                    level = 3,
+                                                    onToggle = {},
+                                                    onSelect = {},
+                                                    onEvent = onEvent,
+                                                    terminology = terminology,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (state.usesIndexHierarchy && state.tables.isNotEmpty()) {
+                    // Elasticsearch index hierarchy: Indices folder -> Index -> Fields
+                    item(key = "indices:") {
+                        TreeNodeItem(
+                            node = TreeNode.TablesFolder(null, null),
+                            isExpanded = state.expandedNodes.contains("indices:"),
+                            isSelected = false,
+                            level = 0,
+                            onToggle = { onEvent(ExplorerEvent.ToggleNode("indices:")) },
+                            onSelect = {},
+                            onEvent = onEvent,
+                            terminology = terminology,
+                            itemCount = state.tables.size,
+                        )
+                    }
+
+                    if (state.expandedNodes.contains("indices:")) {
+                        state.tables.forEach { index ->
+                            val indexNodeId = "esindex:${index.name}"
+                            val isIndexExpanded = state.expandedNodes.contains(indexNodeId)
+                            val isIndexLoading = state.isIndexLoading(index.name)
+
+                            item(key = indexNodeId) {
+                                IndexNodeItem(
+                                    index = index,
+                                    isExpanded = isIndexExpanded,
+                                    isLoading = isIndexLoading,
+                                    isSelected = (state.selectedNode as? TreeNode.IndexNodeElasticsearch)?.index?.name == index.name,
+                                    onToggle = {
+                                        if (isIndexExpanded) {
+                                            onEvent(ExplorerEvent.CollapseIndex(index.name))
+                                        } else {
+                                            onEvent(ExplorerEvent.ExpandIndex(index.name))
+                                        }
+                                    },
+                                    onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.IndexNodeElasticsearch(index))) },
+                                    onEvent = onEvent,
+                                    terminology = terminology,
+                                )
+                            }
+
+                            if (isIndexExpanded) {
+                                val fields = state.getFieldsForIndex(index.name)
+                                val hasMoreFields = state.hasMoreFields(index.name)
+
+                                // Fields folder
+                                val fieldsFolderId = "esfields:${index.name}"
+                                item(key = fieldsFolderId) {
+                                    TreeNodeItem(
+                                        node = TreeNode.IndexFieldsFolder(index.name),
+                                        isExpanded = state.expandedNodes.contains(fieldsFolderId),
+                                        isSelected = false,
+                                        level = 2,
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode(fieldsFolderId)) },
+                                        onSelect = {},
+                                        onEvent = onEvent,
+                                        terminology = terminology,
+                                        itemCount = fields.size,
+                                        hasMore = hasMoreFields,
+                                    )
+                                }
+
+                                // Show fields when Fields folder is expanded
+                                if (state.expandedNodes.contains(fieldsFolderId)) {
+                                    fields.forEach { field ->
+                                        item(key = "esfield:${index.name}:${field.name}") {
+                                            TreeNodeItem(
+                                                node = TreeNode.ColumnNode(field, index.name),
+                                                isExpanded = false,
+                                                isSelected = false,
+                                                level = 3,
+                                                onToggle = {},
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                            )
+                                        }
+                                    }
+
+                                    // Show truncation message if there are more fields
+                                    if (hasMoreFields) {
+                                        item(key = "esfields-more:${index.name}") {
+                                            MoreFieldsIndicator(
+                                                level = 3,
+                                                limit = state.indexFieldLimit,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (state.usesSchemas && state.schemas.isNotEmpty()) {
                     // Schema-based tree for PostgreSQL, MySQL, etc.
                     state.schemas.forEach { schema ->
                         val schemaNodeId = "schema::${schema.name}"
@@ -405,6 +606,56 @@ fun DatabaseTree(
 }
 
 @Composable
+private fun DatabaseNodeItem(
+    database: DatabaseInfo,
+    isExpanded: Boolean,
+    isLoading: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // Expand/collapse icon
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 1.5.dp,
+            )
+        } else {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Database icon
+        Icon(
+            imageVector = Icons.Default.Storage,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        // Database name
+        Text(
+            text = database.name,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
 private fun SchemaNodeItem(
     schema: SchemaInfo,
     isExpanded: Boolean,
@@ -466,6 +717,147 @@ private fun SchemaNodeItem(
 }
 
 @Composable
+private fun IndexNodeItem(
+    index: su.kidoz.core.model.TableInfo,
+    isExpanded: Boolean,
+    isLoading: Boolean,
+    isSelected: Boolean,
+    onToggle: () -> Unit,
+    onSelect: () -> Unit,
+    onEvent: (ExplorerEvent) -> Unit,
+    terminology: DatabaseTerminology?,
+) {
+    val contextMenuItems =
+        remember(index, terminology) {
+            buildList {
+                add(ContextMenuItem("Copy Name") { onEvent(ExplorerEvent.CopyName(index.name)) })
+                add(
+                    ContextMenuItem(terminology?.selectAction ?: "Search...") {
+                        onEvent(ExplorerEvent.GenerateSelect(index.name, null))
+                    },
+                )
+                add(
+                    ContextMenuItem(terminology?.insertAction ?: "Index Document...") {
+                        onEvent(ExplorerEvent.GenerateInsert(index.name, null))
+                    },
+                )
+                add(
+                    ContextMenuItem(terminology?.ddlAction ?: "Get Mappings") {
+                        onEvent(ExplorerEvent.GenerateDdl(index.name, null))
+                    },
+                )
+                add(
+                    ContextMenuItem("Edit Settings...") {
+                        onEvent(ExplorerEvent.ShowEditIndexSettingsDialog(index.name))
+                    },
+                )
+                add(
+                    ContextMenuItem("Edit Mappings...") {
+                        onEvent(ExplorerEvent.ShowEditIndexMappingsDialog(index.name))
+                    },
+                )
+                add(
+                    ContextMenuItem("Delete Index") {
+                        onEvent(ExplorerEvent.ConfirmDeleteIndex(index.name))
+                    },
+                )
+            }
+        }
+
+    ContextMenuArea(items = { contextMenuItems }) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle() }
+                    .then(
+                        if (isSelected) {
+                            Modifier.background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ).padding(start = 28.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Expand/collapse or loading icon
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 1.5.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Index icon
+            Icon(
+                imageVector = Icons.Default.Inventory,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = DBQueTheme.extendedColors.treeTable,
+            )
+
+            // Index name
+            Text(
+                text = index.name,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+
+            // Index info (doc count, size)
+            index.comment?.let { comment ->
+                Text(
+                    text = comment,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreFieldsIndicator(
+    level: Int,
+    limit: Int,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = (12 + level * 16).dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Spacer(Modifier.width(16.dp))
+
+        Icon(
+            imageVector = Icons.Default.MoreHoriz,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.tertiary,
+        )
+
+        Text(
+            text = "Limited to $limit fields",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
+}
+
+@Composable
 private fun TreeNodeItem(
     node: TreeNode,
     isExpanded: Boolean,
@@ -476,6 +868,7 @@ private fun TreeNodeItem(
     onEvent: (ExplorerEvent) -> Unit,
     terminology: DatabaseTerminology? = null,
     itemCount: Int? = null,
+    hasMore: Boolean = false,
 ) {
     val contextMenuItems =
         remember(node, terminology) {
@@ -532,9 +925,9 @@ private fun TreeNodeItem(
             // Item count for folders
             if (itemCount != null && node.type == TreeNodeType.FOLDER) {
                 Text(
-                    text = "($itemCount)",
+                    text = if (hasMore) "($itemCount+)" else "($itemCount)",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (hasMore) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -555,7 +948,9 @@ private fun canExpand(node: TreeNode): Boolean =
         is TreeNode.DatabaseNode, is TreeNode.SchemaNode,
         is TreeNode.TablesFolder, is TreeNode.ViewsFolder,
         is TreeNode.ColumnsFolder, is TreeNode.IndexesFolder,
-        is TreeNode.TableNode,
+        is TreeNode.TableNode, is TreeNode.CollectionNode,
+        is TreeNode.FieldsFolder, is TreeNode.IndexNodeElasticsearch,
+        is TreeNode.IndexFieldsFolder,
         -> true
         else -> false
     }
@@ -576,12 +971,16 @@ private fun getNodeIcon(
         is TreeNode.ViewsFolder -> Icons.AutoMirrored.Filled.ViewList
         is TreeNode.ColumnsFolder -> Icons.Default.ViewColumn
         is TreeNode.IndexesFolder -> Icons.AutoMirrored.Filled.Sort
+        is TreeNode.FieldsFolder -> Icons.Default.ViewColumn
+        is TreeNode.IndexFieldsFolder -> Icons.Default.ViewColumn
+        is TreeNode.IndexNodeElasticsearch -> Icons.Default.Inventory
         is TreeNode.TableNode ->
             when (terminology?.category) {
                 DatabaseCategory.DOCUMENT -> Icons.Default.Description
                 DatabaseCategory.SEARCH_ENGINE -> Icons.Default.Inventory
                 else -> Icons.Default.TableRows
             }
+        is TreeNode.CollectionNode -> Icons.Default.Description
         is TreeNode.ViewNode -> Icons.Default.RemoveRedEye
         is TreeNode.ColumnNode -> Icons.Default.ViewColumn
         is TreeNode.IndexNode -> Icons.AutoMirrored.Filled.Sort
@@ -592,8 +991,11 @@ private fun getNodeColor(node: TreeNode): androidx.compose.ui.graphics.Color =
     when (node) {
         is TreeNode.TablesFolder, is TreeNode.ViewsFolder,
         is TreeNode.ColumnsFolder, is TreeNode.IndexesFolder,
+        is TreeNode.FieldsFolder, is TreeNode.IndexFieldsFolder,
         -> DBQueTheme.extendedColors.treeFolder
         is TreeNode.TableNode -> DBQueTheme.extendedColors.treeTable
+        is TreeNode.CollectionNode -> DBQueTheme.extendedColors.treeTable
+        is TreeNode.IndexNodeElasticsearch -> DBQueTheme.extendedColors.treeTable
         is TreeNode.ViewNode -> DBQueTheme.extendedColors.treeView
         is TreeNode.ColumnNode -> DBQueTheme.extendedColors.treeColumn
         is TreeNode.IndexNode -> DBQueTheme.extendedColors.treeIndex
@@ -678,6 +1080,23 @@ private fun buildContextMenuItems(
                         },
                     )
                 }
+            }
+            is TreeNode.CollectionNode -> {
+                add(
+                    ContextMenuItem("db.find({})...") {
+                        onEvent(ExplorerEvent.GenerateSelect(node.collection.name, null))
+                    },
+                )
+                add(
+                    ContextMenuItem("db.insertOne({})...") {
+                        onEvent(ExplorerEvent.GenerateInsert(node.collection.name, null))
+                    },
+                )
+                add(
+                    ContextMenuItem("Collection DDL") {
+                        onEvent(ExplorerEvent.GenerateDdl(node.collection.name, null))
+                    },
+                )
             }
             is TreeNode.ViewNode -> {
                 add(

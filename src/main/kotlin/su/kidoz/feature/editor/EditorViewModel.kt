@@ -4,12 +4,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import su.kidoz.core.model.DatabaseType
 import su.kidoz.core.model.QueryExecution
 import su.kidoz.core.model.QueryExecutionResult
 import su.kidoz.core.model.QueryHistoryEntry
 import su.kidoz.core.model.QueryResult
 import su.kidoz.core.repository.QueryHistoryRepository
 import su.kidoz.database.ConnectionManager
+import su.kidoz.database.executor.MongoQueryExecutor
 import su.kidoz.database.executor.QueryExecutor
 import su.kidoz.feature.editor.quickfix.QuickFix
 import su.kidoz.feature.editor.quickfix.QuickFixProvider
@@ -27,6 +29,7 @@ class EditorViewModel(
 
     private val liveValidator = LiveValidator()
     private val quickFixProvider = QuickFixProvider()
+    private val mongoQueryExecutor = MongoQueryExecutor()
 
     init {
         // Collect validation results
@@ -513,33 +516,11 @@ class EditorViewModel(
         executionJob =
             viewModelScope.launch {
                 try {
-                    activeConnection.getConnection().use { connection ->
-                        val execution = QueryExecution(query = query)
-                        val startTime = System.currentTimeMillis()
-
-                        when (val result = queryExecutor.execute(connection, execution)) {
-                            is QueryExecutionResult.Success -> {
-                                saveToHistory(
-                                    activeConnection.config.id,
-                                    query,
-                                    result.result.executionTimeMs,
-                                    result.result.rowCount,
-                                    true,
-                                    null,
-                                )
-                                sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
-                            }
-                            is QueryExecutionResult.MultiResult -> {
-                                val totalRows = result.results.sumOf { it.rowCount }
-                                val totalTime = System.currentTimeMillis() - startTime
-                                saveToHistory(activeConnection.config.id, query, totalTime, totalRows, true, null)
-                                sendEffect(EditorEffect.QueryExecuted(result.results))
-                            }
-                            is QueryExecutionResult.Error -> {
-                                saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
-                                sendEffect(EditorEffect.QueryError(result.message))
-                            }
-                        }
+                    // Route to appropriate executor based on database type
+                    when (activeConnection.config.type) {
+                        DatabaseType.MONGODB -> executeMongoQuery(activeConnection, query)
+                        DatabaseType.ELASTICSEARCH -> executeElasticsearchQuery(activeConnection, query)
+                        else -> executeJdbcQuery(activeConnection, query)
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Query execution failed" }
@@ -548,6 +529,78 @@ class EditorViewModel(
                     updateState { copy(isExecuting = false) }
                 }
             }
+    }
+
+    private suspend fun executeJdbcQuery(
+        activeConnection: su.kidoz.database.ActiveConnection,
+        query: String,
+    ) {
+        activeConnection.getConnection().use { connection ->
+            val execution = QueryExecution(query = query)
+            val startTime = System.currentTimeMillis()
+
+            when (val result = queryExecutor.execute(connection, execution)) {
+                is QueryExecutionResult.Success -> {
+                    saveToHistory(
+                        activeConnection.config.id,
+                        query,
+                        result.result.executionTimeMs,
+                        result.result.rowCount,
+                        true,
+                        null,
+                    )
+                    sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
+                }
+                is QueryExecutionResult.MultiResult -> {
+                    val totalRows = result.results.sumOf { it.rowCount }
+                    val totalTime = System.currentTimeMillis() - startTime
+                    saveToHistory(activeConnection.config.id, query, totalTime, totalRows, true, null)
+                    sendEffect(EditorEffect.QueryExecuted(result.results))
+                }
+                is QueryExecutionResult.Error -> {
+                    saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
+                    sendEffect(EditorEffect.QueryError(result.message))
+                }
+            }
+        }
+    }
+
+    private suspend fun executeMongoQuery(
+        activeConnection: su.kidoz.database.ActiveConnection,
+        query: String,
+    ) {
+        val mongoConnection = activeConnection.getMongoConnection()
+
+        when (val result = mongoQueryExecutor.execute(mongoConnection, query)) {
+            is QueryExecutionResult.Success -> {
+                saveToHistory(
+                    activeConnection.config.id,
+                    query,
+                    result.result.executionTimeMs,
+                    result.result.rowCount,
+                    true,
+                    null,
+                )
+                sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
+            }
+            is QueryExecutionResult.MultiResult -> {
+                val totalRows = result.results.sumOf { it.rowCount }
+                saveToHistory(activeConnection.config.id, query, 0, totalRows, true, null)
+                sendEffect(EditorEffect.QueryExecuted(result.results))
+            }
+            is QueryExecutionResult.Error -> {
+                saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
+                sendEffect(EditorEffect.QueryError(result.message))
+            }
+        }
+    }
+
+    private suspend fun executeElasticsearchQuery(
+        activeConnection: su.kidoz.database.ActiveConnection,
+        query: String,
+    ) {
+        // TODO: Implement Elasticsearch query execution
+        sendEffect(EditorEffect.QueryError("Elasticsearch query execution not yet implemented"))
     }
 
     private suspend fun saveToHistory(

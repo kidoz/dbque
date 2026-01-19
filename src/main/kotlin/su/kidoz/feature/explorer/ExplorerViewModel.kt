@@ -47,6 +47,14 @@ class ExplorerViewModel(
             is ExplorerEvent.LoadSchemaContents -> loadSchemaContents(event.schemaName)
             is ExplorerEvent.ExpandSchema -> expandSchema(event.schemaName)
             is ExplorerEvent.CollapseSchema -> collapseSchema(event.schemaName)
+            // MongoDB database navigation
+            is ExplorerEvent.ExpandDatabase -> expandDatabase(event.databaseName)
+            is ExplorerEvent.CollapseDatabase -> collapseDatabase(event.databaseName)
+            is ExplorerEvent.LoadDatabaseCollections -> loadDatabaseCollections(event.databaseName)
+            // Elasticsearch index navigation
+            is ExplorerEvent.ExpandIndex -> expandIndex(event.indexName)
+            is ExplorerEvent.CollapseIndex -> collapseIndex(event.indexName)
+            is ExplorerEvent.LoadIndexFields -> loadIndexFields(event.indexName)
             // Elasticsearch index management
             is ExplorerEvent.ShowCreateIndexDialog -> showCreateIndexDialog()
             is ExplorerEvent.ShowEditIndexSettingsDialog -> showEditIndexSettingsDialog(event.indexName)
@@ -135,13 +143,18 @@ class ExplorerViewModel(
         val mongoConnection = activeConnection.getMongoConnection()
         val driver = activeConnection.driver as MongoDbDriver
 
-        val collections = driver.getCollections(mongoConnection)
+        // Load databases for MongoDB hierarchy
+        val databases = driver.getDatabasesMongo(mongoConnection)
 
         updateState {
             copy(
+                databases = databases,
                 schemas = emptyList(),
-                tables = collections,
+                tables = emptyList(),
                 views = emptyList(),
+                collectionsByDatabase = emptyMap(),
+                loadedDatabases = emptySet(),
+                loadingDatabases = emptySet(),
                 isLoading = false,
                 expandedNodes = emptySet(),
             )
@@ -159,6 +172,9 @@ class ExplorerViewModel(
                 schemas = emptyList(),
                 tables = indices,
                 views = emptyList(),
+                fieldsByIndex = emptyMap(),
+                loadedIndices = emptySet(),
+                loadingIndices = emptySet(),
                 isLoading = false,
                 expandedNodes = emptySet(),
             )
@@ -186,6 +202,22 @@ class ExplorerViewModel(
             val tableName = parts.getOrNull(1) ?: return
             loadTableDetails(tableName, schema)
         }
+
+        // Load collection details when expanding a MongoDB collection node
+        if (isExpanding && nodeId.startsWith("collection:")) {
+            val parts = nodeId.removePrefix("collection:").split(":", limit = 2)
+            val databaseName = parts.getOrNull(0) ?: return
+            val collectionName = parts.getOrNull(1) ?: return
+            loadMongoCollectionDetails(collectionName, databaseName)
+        }
+
+        // Load field mappings when expanding an Elasticsearch index node
+        if (isExpanding && nodeId.startsWith("esindex:")) {
+            val indexName = nodeId.removePrefix("esindex:")
+            if (!currentState.isIndexLoaded(indexName)) {
+                loadIndexFields(indexName)
+            }
+        }
     }
 
     private fun expandSchema(schemaName: String) {
@@ -206,6 +238,65 @@ class ExplorerViewModel(
         val nodeId = "schema::$schemaName"
         updateState {
             copy(expandedNodes = expandedNodes - nodeId)
+        }
+    }
+
+    // ==================== MongoDB Database Navigation ====================
+
+    private fun expandDatabase(databaseName: String) {
+        val nodeId = "db:$databaseName"
+
+        // Add to expanded nodes
+        updateState {
+            copy(expandedNodes = expandedNodes + nodeId)
+        }
+
+        // Load collections if not already loaded
+        if (!currentState.isDatabaseLoaded(databaseName)) {
+            loadDatabaseCollections(databaseName)
+        }
+    }
+
+    private fun collapseDatabase(databaseName: String) {
+        val nodeId = "db:$databaseName"
+        updateState {
+            copy(expandedNodes = expandedNodes - nodeId)
+        }
+    }
+
+    private fun loadDatabaseCollections(databaseName: String) {
+        val activeConnection = connectionManager.activeConnection ?: return
+
+        // Don't reload if already loaded or currently loading
+        if (currentState.isDatabaseLoaded(databaseName) || currentState.isDatabaseLoading(databaseName)) {
+            return
+        }
+
+        viewModelScope.launch {
+            updateState {
+                copy(loadingDatabases = loadingDatabases + databaseName)
+            }
+
+            try {
+                val mongoConnection = activeConnection.getMongoConnection()
+                val driver = activeConnection.driver as MongoDbDriver
+
+                val collections = driver.getCollections(mongoConnection, databaseName)
+
+                updateState {
+                    copy(
+                        collectionsByDatabase = collectionsByDatabase + (databaseName to collections),
+                        loadedDatabases = loadedDatabases + databaseName,
+                        loadingDatabases = loadingDatabases - databaseName,
+                    )
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load collections for database $databaseName" }
+                updateState {
+                    copy(loadingDatabases = loadingDatabases - databaseName)
+                }
+                sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load collections"))
+            }
         }
     }
 
@@ -320,6 +411,7 @@ class ExplorerViewModel(
         val driver = activeConnection.driver as MongoDbDriver
 
         val columns = driver.getFieldsMongo(mongoConnection, collectionName)
+        val indexes = driver.getIndexesMongo(mongoConnection, collectionName)
 
         val tableInfo =
             currentState.tables.find { it.name == collectionName }
@@ -333,9 +425,105 @@ class ExplorerViewModel(
                         columns = columns,
                         primaryKey = null,
                         foreignKeys = emptyList(),
-                        indexes = emptyList(),
+                        indexes = indexes,
                     ),
             )
+        }
+    }
+
+    private fun loadMongoCollectionDetails(
+        collectionName: String,
+        databaseName: String,
+    ) {
+        val activeConnection = connectionManager.activeConnection ?: return
+
+        viewModelScope.launch {
+            try {
+                val mongoConnection = activeConnection.getMongoConnection()
+                val driver = activeConnection.driver as MongoDbDriver
+
+                val columns = driver.getFieldsMongo(mongoConnection, collectionName, databaseName)
+                val indexes = driver.getIndexesMongo(mongoConnection, collectionName, databaseName)
+
+                val collections = currentState.collectionsByDatabase[databaseName] ?: emptyList()
+                val tableInfo = collections.find { it.name == collectionName } ?: return@launch
+
+                updateState {
+                    copy(
+                        tableDetails =
+                            TableDetails(
+                                table = tableInfo.copy(columns = columns),
+                                columns = columns,
+                                primaryKey = null,
+                                foreignKeys = emptyList(),
+                                indexes = indexes,
+                            ),
+                    )
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load collection details for $collectionName" }
+                sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load collection details"))
+            }
+        }
+    }
+
+    // ==================== Elasticsearch Index Navigation ====================
+
+    private fun expandIndex(indexName: String) {
+        val nodeId = "esindex:$indexName"
+
+        // Add to expanded nodes
+        updateState {
+            copy(expandedNodes = expandedNodes + nodeId)
+        }
+
+        // Load fields if not already loaded
+        if (!currentState.isIndexLoaded(indexName)) {
+            loadIndexFields(indexName)
+        }
+    }
+
+    private fun collapseIndex(indexName: String) {
+        val nodeId = "esindex:$indexName"
+        updateState {
+            copy(expandedNodes = expandedNodes - nodeId)
+        }
+    }
+
+    private fun loadIndexFields(indexName: String) {
+        val activeConnection = connectionManager.activeConnection ?: return
+
+        // Don't reload if already loaded or currently loading
+        if (currentState.isIndexLoaded(indexName) || currentState.isIndexLoading(indexName)) {
+            return
+        }
+
+        viewModelScope.launch {
+            updateState {
+                copy(loadingIndices = loadingIndices + indexName)
+            }
+
+            try {
+                val esConnection = activeConnection.getElasticsearchConnection()
+                val driver = activeConnection.driver as ElasticsearchDriver
+
+                // Load fields with limit to handle large mappings
+                val fields = driver.getFieldsElasticsearch(esConnection, indexName, currentState.indexFieldLimit)
+
+                updateState {
+                    copy(
+                        fieldsByIndex = fieldsByIndex + (indexName to fields),
+                        loadedIndices = loadedIndices + indexName,
+                        loadingIndices = loadingIndices - indexName,
+                    )
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load fields for index $indexName" }
+                updateState {
+                    copy(loadingIndices = loadingIndices - indexName)
+                }
+                sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load index fields"))
+            }
         }
     }
 

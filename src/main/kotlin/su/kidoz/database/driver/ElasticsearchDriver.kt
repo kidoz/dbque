@@ -173,10 +173,16 @@ class ElasticsearchDriver : DatabaseDriver {
 
     /**
      * Get field mappings for an index (equivalent to columns).
+     *
+     * @param connection The Elasticsearch connection
+     * @param indexName The name of the index
+     * @param limit Maximum number of fields to return (default: no limit). Use this to prevent
+     *              loading huge numbers of fields from indices with complex nested mappings.
      */
     suspend fun getFieldsElasticsearch(
         connection: ElasticsearchDatabaseConnection,
         indexName: String,
+        limit: Int = Int.MAX_VALUE,
     ): List<ColumnInfo> =
         withContext(Dispatchers.IO) {
             try {
@@ -187,12 +193,16 @@ class ElasticsearchDriver : DatabaseDriver {
                 var ordinal = 1
 
                 mappings[indexName]?.mappings()?.properties()?.forEach { (fieldName, property) ->
+                    if (fields.size >= limit) return@forEach
+
                     fields.add(propertyToColumnInfo(fieldName, property, ordinal++))
-                    // Handle nested properties
-                    extractNestedFields(fieldName, property, fields, ordinal)
+                    // Handle nested properties (with limit check)
+                    if (fields.size < limit) {
+                        ordinal = extractNestedFieldsWithLimit(fieldName, property, fields, ordinal, limit)
+                    }
                 }
 
-                fields
+                fields.take(limit)
             } catch (e: Exception) {
                 logger.error(e) { "Failed to get Elasticsearch mappings for $indexName" }
                 emptyList()
@@ -220,26 +230,31 @@ class ElasticsearchDriver : DatabaseDriver {
         )
     }
 
-    private fun extractNestedFields(
+    private fun extractNestedFieldsWithLimit(
         prefix: String,
         property: Property,
         fields: MutableList<ColumnInfo>,
         startOrdinal: Int,
+        limit: Int,
     ): Int {
         var ordinal = startOrdinal
         when {
             property.isObject() -> {
                 property.`object`().properties()?.forEach { (nestedName, nestedProp) ->
+                    if (fields.size >= limit) return ordinal
+
                     val fullName = "$prefix.$nestedName"
                     fields.add(propertyToColumnInfo(fullName, nestedProp, ordinal++))
-                    ordinal = extractNestedFields(fullName, nestedProp, fields, ordinal)
+                    ordinal = extractNestedFieldsWithLimit(fullName, nestedProp, fields, ordinal, limit)
                 }
             }
             property.isNested() -> {
                 property.nested().properties()?.forEach { (nestedName, nestedProp) ->
+                    if (fields.size >= limit) return ordinal
+
                     val fullName = "$prefix.$nestedName"
                     fields.add(propertyToColumnInfo(fullName, nestedProp, ordinal++))
-                    ordinal = extractNestedFields(fullName, nestedProp, fields, ordinal)
+                    ordinal = extractNestedFieldsWithLimit(fullName, nestedProp, fields, ordinal, limit)
                 }
             }
         }

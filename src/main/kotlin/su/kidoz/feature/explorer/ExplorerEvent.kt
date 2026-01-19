@@ -55,6 +55,32 @@ sealed interface ExplorerEvent : UiEvent {
         val schemaName: String,
     ) : ExplorerEvent
 
+    // MongoDB database navigation
+    data class ExpandDatabase(
+        val databaseName: String,
+    ) : ExplorerEvent
+
+    data class CollapseDatabase(
+        val databaseName: String,
+    ) : ExplorerEvent
+
+    data class LoadDatabaseCollections(
+        val databaseName: String,
+    ) : ExplorerEvent
+
+    // Elasticsearch index navigation
+    data class ExpandIndex(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data class CollapseIndex(
+        val indexName: String,
+    ) : ExplorerEvent
+
+    data class LoadIndexFields(
+        val indexName: String,
+    ) : ExplorerEvent
+
     // Elasticsearch index management
     data object ShowCreateIndexDialog : ExplorerEvent
 

@@ -23,6 +23,15 @@ data class ExplorerState(
     val loadedSchemas: Set<String> = emptySet(),
     val loadingSchemas: Set<String> = emptySet(),
     val defaultSchema: String? = null,
+    // MongoDB database-organized data
+    val collectionsByDatabase: Map<String, List<TableInfo>> = emptyMap(),
+    val loadedDatabases: Set<String> = emptySet(),
+    val loadingDatabases: Set<String> = emptySet(),
+    // Elasticsearch index-organized data
+    val fieldsByIndex: Map<String, List<ColumnInfo>> = emptyMap(),
+    val loadedIndices: Set<String> = emptySet(),
+    val loadingIndices: Set<String> = emptySet(),
+    val indexFieldLimit: Int = DEFAULT_FIELD_LIMIT,
 ) : UiState {
     /** Get the terminology for the current database type */
     val terminology: DatabaseTerminology?
@@ -31,6 +40,14 @@ data class ExplorerState(
     /** Check if database uses schemas (PostgreSQL, MySQL, etc.) */
     val usesSchemas: Boolean
         get() = databaseType in listOf(DatabaseType.POSTGRESQL, DatabaseType.MYSQL, DatabaseType.H2)
+
+    /** Check if database uses database hierarchy (MongoDB) */
+    val usesDatabaseHierarchy: Boolean
+        get() = databaseType == DatabaseType.MONGODB
+
+    /** Check if database uses index hierarchy (Elasticsearch) */
+    val usesIndexHierarchy: Boolean
+        get() = databaseType == DatabaseType.ELASTICSEARCH
 
     /** Get tables for a specific schema */
     fun getTablesForSchema(schemaName: String): List<TableInfo> = tablesBySchema[schemaName] ?: emptyList()
@@ -43,6 +60,35 @@ data class ExplorerState(
 
     /** Check if a schema is currently loading */
     fun isSchemaLoading(schemaName: String): Boolean = loadingSchemas.contains(schemaName)
+
+    /** Get collections for a specific MongoDB database */
+    fun getCollectionsForDatabase(databaseName: String): List<TableInfo> = collectionsByDatabase[databaseName] ?: emptyList()
+
+    /** Check if a MongoDB database's collections have been loaded */
+    fun isDatabaseLoaded(databaseName: String): Boolean = loadedDatabases.contains(databaseName)
+
+    /** Check if a MongoDB database is currently loading */
+    fun isDatabaseLoading(databaseName: String): Boolean = loadingDatabases.contains(databaseName)
+
+    /** Get fields for a specific Elasticsearch index */
+    fun getFieldsForIndex(indexName: String): List<ColumnInfo> = fieldsByIndex[indexName] ?: emptyList()
+
+    /** Check if an Elasticsearch index's fields have been loaded */
+    fun isIndexLoaded(indexName: String): Boolean = loadedIndices.contains(indexName)
+
+    /** Check if an Elasticsearch index is currently loading */
+    fun isIndexLoading(indexName: String): Boolean = loadingIndices.contains(indexName)
+
+    /** Check if index has more fields than the limit */
+    fun hasMoreFields(indexName: String): Boolean {
+        val fields = fieldsByIndex[indexName] ?: return false
+        return fields.size >= indexFieldLimit
+    }
+
+    companion object {
+        /** Default limit for number of fields to load per index */
+        const val DEFAULT_FIELD_LIMIT = 100
+    }
 }
 
 data class TableDetails(
@@ -104,6 +150,28 @@ sealed class TreeNode(
         val index: IndexInfo,
         val tableName: String,
     ) : TreeNode("index:$tableName:${index.name}", index.name, TreeNodeType.INDEX)
+
+    /** MongoDB collection node - separate from TableNode for proper hierarchy */
+    data class CollectionNode(
+        val collection: TableInfo,
+        val databaseName: String,
+    ) : TreeNode("collection:$databaseName:${collection.name}", collection.name, TreeNodeType.TABLE)
+
+    /** Fields folder under MongoDB collection */
+    data class FieldsFolder(
+        val collectionName: String,
+        val databaseName: String,
+    ) : TreeNode("fields:$databaseName:$collectionName", "Fields", TreeNodeType.FOLDER)
+
+    /** Elasticsearch index node */
+    data class IndexNodeElasticsearch(
+        val index: TableInfo,
+    ) : TreeNode("esindex:${index.name}", index.name, TreeNodeType.TABLE)
+
+    /** Fields folder under Elasticsearch index */
+    data class IndexFieldsFolder(
+        val indexName: String,
+    ) : TreeNode("esfields:$indexName", "Fields", TreeNodeType.FOLDER)
 }
 
 enum class TreeNodeType {
