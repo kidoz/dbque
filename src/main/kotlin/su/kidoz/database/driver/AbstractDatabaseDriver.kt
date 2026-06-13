@@ -228,6 +228,35 @@ abstract class AbstractDatabaseDriver : DatabaseDriver {
             }
         }
 
+    override suspend fun getKeywords(connection: Connection): List<String> =
+        withContext(Dispatchers.IO) {
+            try {
+                connection.metaData.sqlKeywords
+                    .split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+    override suspend fun getFunctions(connection: Connection): List<String> =
+        withContext(Dispatchers.IO) {
+            try {
+                val metadata = connection.metaData
+                val functions = mutableSetOf<String>()
+
+                metadata.stringFunctions?.split(",")?.forEach { functions.add(it.trim()) }
+                metadata.numericFunctions?.split(",")?.forEach { functions.add(it.trim()) }
+                metadata.timeDateFunctions?.split(",")?.forEach { functions.add(it.trim()) }
+                metadata.systemFunctions?.split(",")?.forEach { functions.add(it.trim()) }
+
+                functions.filter { it.isNotEmpty() }.toList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
     override suspend fun getIndexes(
         connection: Connection,
         table: String,

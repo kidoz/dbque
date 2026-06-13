@@ -308,13 +308,16 @@ class EditorViewModel(
             val activeConnection = connectionManager.activeConnection
             val dbType = activeConnection?.config?.type
             val version = null
-            // Ideally fetch available tables, but for now we'll pass emptySet
+
+            // Pass available tables from autocomplete cache for unknown table checking
+            val availableTables = autocompleteProvider.getCachedTables().map { it.name }.toSet()
+
             liveValidator.submitForValidation(
                 tabId = tabId,
                 content = content,
                 databaseType = dbType,
                 version = version,
-                tables = emptySet(),
+                tables = availableTables,
             )
         }
     }

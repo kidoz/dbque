@@ -34,6 +34,8 @@ class AutocompleteProvider(
 
     private var cachedTables: List<TableInfo> = emptyList()
     private var cachedColumns: Map<String, List<ColumnInfo>> = emptyMap()
+    private var cachedKeywords: List<String> = emptyList()
+    private var cachedFunctions: List<String> = emptyList()
     private var lastConnectionId: String? = null
 
     private val scopeAnalyzer = QueryScopeAnalyzer()
@@ -150,6 +152,8 @@ class AutocompleteProvider(
                         cachedTables.associate { table ->
                             table.name to driver.getColumns(conn, table.name, table.schema)
                         }
+                    cachedKeywords = driver.getKeywords(conn)
+                    cachedFunctions = driver.getFunctions(conn)
                     lastConnectionId = connectionId
                 }
 
@@ -446,17 +450,35 @@ class AutocompleteProvider(
 
     private fun getFunctionSuggestionsEnhanced(prefix: String): List<AutocompleteItem> {
         val signatures = functionSignatureProvider.getFunctionsByPrefix(prefix)
+        val signatureNames = signatures.map { it.name.uppercase() }.toSet()
 
-        return signatures.map { sig ->
-            val paramHint = functionSignatureProvider.formatShortHint(sig)
-            AutocompleteItem(
-                text = sig.name,
-                displayText = paramHint,
-                type = AutocompleteType.FUNCTION,
-                detail = sig.description,
-                insertText = "${sig.name}(",
+        val results =
+            signatures
+                .map { sig ->
+                    val paramHint = functionSignatureProvider.formatShortHint(sig)
+                    AutocompleteItem(
+                        text = sig.name,
+                        displayText = paramHint,
+                        type = AutocompleteType.FUNCTION,
+                        detail = sig.description,
+                        insertText = "${sig.name}(",
+                    )
+                }.toMutableList()
+
+        // Add dynamic functions from JDBC metadata
+        cachedFunctions.filter { it.uppercase().startsWith(prefix) && it.uppercase() !in signatureNames }.forEach { funcName ->
+            results.add(
+                AutocompleteItem(
+                    text = funcName,
+                    displayText = "$funcName()",
+                    type = AutocompleteType.FUNCTION,
+                    detail = "Database function",
+                    insertText = "$funcName(",
+                ),
             )
         }
+
+        return results
     }
 
     fun invalidateCache() {

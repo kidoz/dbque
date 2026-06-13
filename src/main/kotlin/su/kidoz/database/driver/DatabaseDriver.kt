@@ -51,6 +51,16 @@ interface DatabaseDriver {
         catalog: String? = null,
     ): List<ForeignKeyInfo>
 
+    /**
+     * Get database-specific SQL keywords.
+     */
+    suspend fun getKeywords(connection: Connection): List<String> = emptyList()
+
+    /**
+     * Get database-specific functions.
+     */
+    suspend fun getFunctions(connection: Connection): List<String> = emptyList()
+
     suspend fun getIndexes(
         connection: Connection,
         table: String,
