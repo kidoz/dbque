@@ -31,7 +31,8 @@ class QueryParserService {
         sql: String,
         dialect: SqlDialect = SqlDialect.POSTGRESQL,
         version: DatabaseVersion? = null,
-    ): ValidationResult = SqlValidator(dialect, version).validate(sql)
+        availableTables: Set<String> = emptySet(),
+    ): ValidationResult = SqlValidator(dialect, version, availableTables).validate(sql)
 
     fun highlightSql(
         sql: String,
@@ -132,9 +133,10 @@ class QueryParserService {
     fun validate(
         query: String,
         version: DatabaseVersion? = null,
+        availableTables: Set<String> = emptySet(),
     ): ValidationResult =
         when (detectQueryType(query)) {
-            DatabaseType.SQL -> validateSql(query, version = version)
+            DatabaseType.SQL -> validateSql(query, version = version, availableTables = availableTables)
             DatabaseType.MONGODB -> validateMongo(query, version)
             DatabaseType.ELASTICSEARCH -> validateElasticsearch(query, version)
         }
@@ -179,9 +181,10 @@ class QueryParserService {
         type: DatabaseType,
         dialect: SqlDialect = SqlDialect.POSTGRESQL,
         version: DatabaseVersion? = null,
+        availableTables: Set<String> = emptySet(),
     ): ValidationResult =
         when (type) {
-            DatabaseType.SQL -> validateSql(query, dialect, version)
+            DatabaseType.SQL -> validateSql(query, dialect, version, availableTables)
             DatabaseType.MONGODB -> validateMongo(query, version)
             DatabaseType.ELASTICSEARCH -> validateElasticsearch(query, version)
         }

@@ -9,7 +9,10 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import su.kidoz.core.model.DatabaseType
 import su.kidoz.feature.parser.QueryParserService
+import su.kidoz.feature.parser.sql.SqlDialect
+import su.kidoz.feature.parser.validation.DatabaseVersion
 import su.kidoz.feature.parser.validation.ValidationIssue
 import su.kidoz.feature.parser.validation.ValidationResult
 
@@ -29,6 +32,9 @@ data class LiveValidationResult(
 data class ValidationInput(
     val tabId: String,
     val content: String,
+    val databaseType: DatabaseType? = null,
+    val version: DatabaseVersion? = null,
+    val tables: Set<String> = emptySet(),
 )
 
 /**
@@ -61,8 +67,11 @@ class LiveValidator(
     suspend fun submitForValidation(
         tabId: String,
         content: String,
+        databaseType: DatabaseType? = null,
+        version: DatabaseVersion? = null,
+        tables: Set<String> = emptySet(),
     ) {
-        validationInput.emit(ValidationInput(tabId, content))
+        validationInput.emit(ValidationInput(tabId, content, databaseType, version, tables))
     }
 
     /**
@@ -86,7 +95,41 @@ class LiveValidator(
         }
 
         return try {
-            val result = parserService.validate(input.content)
+            val parserType =
+                when (input.databaseType) {
+                    DatabaseType.MONGODB -> su.kidoz.feature.parser.highlight.DatabaseType.MONGODB
+
+                    DatabaseType.ELASTICSEARCH -> su.kidoz.feature.parser.highlight.DatabaseType.ELASTICSEARCH
+
+                    DatabaseType.POSTGRESQL,
+                    DatabaseType.MYSQL,
+                    DatabaseType.SQLITE,
+                    DatabaseType.H2,
+                    -> su.kidoz.feature.parser.highlight.DatabaseType.SQL
+
+                    null -> null
+                }
+
+            val dialect =
+                when (input.databaseType) {
+                    DatabaseType.MYSQL -> SqlDialect.MYSQL
+                    DatabaseType.SQLITE -> SqlDialect.SQLITE
+                    else -> SqlDialect.POSTGRESQL
+                }
+
+            val result =
+                if (parserType != null) {
+                    parserService.validateAs(
+                        query = input.content,
+                        type = parserType,
+                        dialect = dialect,
+                        version = input.version,
+                        availableTables = input.tables,
+                    )
+                } else {
+                    parserService.validate(input.content, input.version, input.tables)
+                }
+
             LiveValidationResult(
                 tabId = input.tabId,
                 issues = result.issues,

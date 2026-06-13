@@ -181,6 +181,16 @@ class SqlValidator(
                         code = "SQL001",
                     ),
                 )
+            } else {
+                issues.add(
+                    ValidationIssue(
+                        message = "Full syntax validation is not supported for DDL/procedural statements.",
+                        severity = IssueSeverity.INFO,
+                        position = SourcePosition(0, sql.trimEnd().length),
+                        code = "SQL002",
+                    ),
+                )
+                validateBasicSyntax(sql, issues)
             }
             return ValidationResult(issues, null)
         }
@@ -239,6 +249,77 @@ class SqlValidator(
                 "WITH",
                 "MERGE",
             )
+    }
+
+    private fun validateBasicSyntax(
+        sql: String,
+        issues: MutableList<ValidationIssue>,
+    ) {
+        var inString = false
+        var stringChar = '\u0000'
+        var parens = 0
+        var i = 0
+
+        while (i < sql.length) {
+            val c = sql[i]
+            if (inString) {
+                if (c == stringChar) {
+                    if (i + 1 < sql.length && sql[i + 1] == stringChar) {
+                        i++ // Skip escaped quote
+                    } else {
+                        inString = false
+                    }
+                }
+            } else {
+                when (c) {
+                    '\'', '"' -> {
+                        inString = true
+                        stringChar = c
+                    }
+
+                    '(' -> {
+                        parens++
+                    }
+
+                    ')' -> {
+                        parens--
+                        if (parens < 0) {
+                            issues.add(
+                                ValidationIssue(
+                                    "Unbalanced closing parenthesis",
+                                    IssueSeverity.ERROR,
+                                    SourcePosition(i, i + 1),
+                                    "SQL003",
+                                ),
+                            )
+                            parens = 0
+                        }
+                    }
+                }
+            }
+            i++
+        }
+
+        if (inString) {
+            issues.add(
+                ValidationIssue(
+                    "Unclosed string literal",
+                    IssueSeverity.ERROR,
+                    SourcePosition(sql.length - 1, sql.length),
+                    "SQL004",
+                ),
+            )
+        }
+        if (parens > 0) {
+            issues.add(
+                ValidationIssue(
+                    "Unclosed parenthesis",
+                    IssueSeverity.ERROR,
+                    SourcePosition(sql.length - 1, sql.length),
+                    "SQL005",
+                ),
+            )
+        }
     }
 
     private fun validateStatement(
