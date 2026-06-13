@@ -8,6 +8,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.compose.KoinApplication
+import org.koin.dsl.koinConfiguration
 import su.kidoz.di.appModule
 import su.kidoz.ui.MainWindow
 import su.kidoz.ui.theme.DBQueTheme
@@ -23,9 +24,11 @@ fun main() =
                 size = DpSize(1400.dp, 900.dp),
             )
 
-        KoinApplication(application = {
-            modules(appModule)
-        }) {
+        KoinApplication(
+            koinConfiguration {
+                modules(appModule)
+            },
+        ) {
             var darkTheme by remember { mutableStateOf(true) }
 
             Window(
