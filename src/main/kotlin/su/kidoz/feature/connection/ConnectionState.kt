@@ -46,8 +46,13 @@ data class ConnectionDialogState(
                 isSshValid &&
                 when (type) {
                     DatabaseType.SQLITE, DatabaseType.H2 -> path.isNotBlank()
-                    DatabaseType.MONGODB -> host.isNotBlank() // MongoDB database is optional
-                    DatabaseType.ELASTICSEARCH -> host.isNotBlank() // Elasticsearch only needs host
+
+                    DatabaseType.MONGODB -> host.isNotBlank()
+
+                    // MongoDB database is optional
+                    DatabaseType.ELASTICSEARCH -> host.isNotBlank()
+
+                    // Elasticsearch only needs host
                     else -> host.isNotBlank() && database.isNotBlank()
                 }
 
@@ -57,7 +62,7 @@ data class ConnectionDialogState(
                 (
                     sshHost.isNotBlank() &&
                         sshUsername.isNotBlank() &&
-                        (sshUseKeyAuth && sshPrivateKeyPath.isNotBlank() || !sshUseKeyAuth && sshPassword.isNotBlank())
+                        ((sshUseKeyAuth && sshPrivateKeyPath.isNotBlank()) || (!sshUseKeyAuth && sshPassword.isNotBlank()))
                 )
 
     fun toConnectionConfig(): ConnectionConfig {

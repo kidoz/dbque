@@ -89,12 +89,14 @@ fun QueryPlanPanel(
                         modifier = Modifier.weight(1f),
                     )
                 }
+
                 PlanViewMode.TABLE -> {
                     PlanTableView(
                         nodes = state.planNodes,
                         modifier = Modifier.weight(1f),
                     )
                 }
+
                 PlanViewMode.RAW -> {
                     PlanRawView(
                         rawPlan = state.rawPlan,
@@ -471,8 +473,14 @@ private fun getNodeColor(
  */
 private fun getCostGradientColor(costRatio: Float): Color =
     when {
-        costRatio < 0.25f -> Color(0xFF4CAF50) // Green
-        costRatio < 0.50f -> Color(0xFFFFEB3B) // Yellow
-        costRatio < 0.75f -> Color(0xFFFF9800) // Orange
+        costRatio < 0.25f -> Color(0xFF4CAF50)
+
+        // Green
+        costRatio < 0.50f -> Color(0xFFFFEB3B)
+
+        // Yellow
+        costRatio < 0.75f -> Color(0xFFFF9800)
+
+        // Orange
         else -> Color(0xFFF44336) // Red
     }

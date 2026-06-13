@@ -58,13 +58,21 @@ data class ColumnInfo(
         get() {
             val base = dataType
             return when {
-                size != null && precision != null && scale != null && scale > 0 ->
+                size != null && precision != null && scale != null && scale > 0 -> {
                     "$base($precision,$scale)"
-                size != null && size > 0 ->
+                }
+
+                size != null && size > 0 -> {
                     "$base($size)"
-                precision != null && precision > 0 ->
+                }
+
+                precision != null && precision > 0 -> {
                     "$base($precision)"
-                else -> base
+                }
+
+                else -> {
+                    base
+                }
             }
         }
 }

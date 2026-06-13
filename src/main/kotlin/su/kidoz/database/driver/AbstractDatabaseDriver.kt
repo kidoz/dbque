@@ -385,12 +385,17 @@ abstract class AbstractDatabaseDriver : DatabaseDriver {
             val capabilities =
                 when (type) {
                     DatabaseType.POSTGRESQL -> DatabaseCapabilities.forPostgres(version)
+
                     DatabaseType.MYSQL -> DatabaseCapabilities.forMySql(version)
+
                     DatabaseType.SQLITE -> DatabaseCapabilities.forSqlite(version)
+
                     DatabaseType.H2 -> DatabaseCapabilities.forH2(version, detectH2Mode(connection))
+
                     DatabaseType.MONGODB -> throw UnsupportedOperationException(
                         "MongoDB doesn't use JDBC. Use MongoDbDriver.getCapabilitiesMongo() instead.",
                     )
+
                     DatabaseType.ELASTICSEARCH -> throw UnsupportedOperationException(
                         "Elasticsearch doesn't use JDBC. Use ElasticsearchDriver.getCapabilitiesElasticsearch() instead.",
                     )

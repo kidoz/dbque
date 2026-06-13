@@ -19,33 +19,60 @@ class ResultsViewModel(
     override fun onEvent(event: ResultsEvent) {
         when (event) {
             is ResultsEvent.SetResults -> setResults(event.results)
+
             is ResultsEvent.ClearResults -> clearResults()
+
             is ResultsEvent.SelectResultTab -> selectResultTab(event.index)
+
             is ResultsEvent.SortByColumn -> sortByColumn(event.columnIndex)
+
             is ResultsEvent.SetFilter -> setFilter(event.text)
+
             is ResultsEvent.ClearFilter -> clearFilter()
+
             is ResultsEvent.SelectRow -> selectRow(event.rowIndex, event.addToSelection)
+
             is ResultsEvent.SelectRows -> selectRows(event.startRow, event.endRow)
+
             is ResultsEvent.SelectAllRows -> selectAllRows()
+
             is ResultsEvent.ClearSelection -> clearSelection()
+
             is ResultsEvent.SelectColumn -> selectColumn(event.columnIndex)
+
             is ResultsEvent.CopySelectedCells -> copySelectedCells()
+
             is ResultsEvent.CopySelectedRows -> copySelectedRows()
+
             is ResultsEvent.CopyColumnValues -> copyColumnValues()
+
             is ResultsEvent.ShowExportDialog -> showExportDialog()
+
             is ResultsEvent.HideExportDialog -> hideExportDialog()
+
             is ResultsEvent.Export -> export(event.format, event.selectedOnly)
+
             // Edit mode events
             is ResultsEvent.SetEditMode -> setEditMode(event.enabled)
+
             is ResultsEvent.SetTableInfo -> setTableInfo(event.tableName, event.schemaName, event.primaryKeyColumns)
+
             is ResultsEvent.StartCellEdit -> startCellEdit(event.rowIndex, event.columnIndex, event.value)
+
             is ResultsEvent.UpdateCellEdit -> updateCellEdit(event.value)
+
             is ResultsEvent.CommitCellEdit -> commitCellEdit()
+
             is ResultsEvent.CancelCellEdit -> cancelCellEdit()
+
             is ResultsEvent.SaveChanges -> saveChanges()
+
             is ResultsEvent.DiscardChanges -> discardChanges()
+
             is ResultsEvent.ShowDeleteConfirmation -> showDeleteConfirmation()
+
             is ResultsEvent.HideDeleteConfirmation -> hideDeleteConfirmation()
+
             is ResultsEvent.DeleteSelectedRows -> deleteSelectedRows()
         }
     }
@@ -483,15 +510,29 @@ class ResultsViewModel(
         }
 
         return when (jdbcType) {
-            java.sql.Types.BOOLEAN, java.sql.Types.BIT ->
+            java.sql.Types.BOOLEAN, java.sql.Types.BIT -> {
                 value.equals("true", ignoreCase = true) || value == "1"
-            java.sql.Types.TINYINT, java.sql.Types.SMALLINT, java.sql.Types.INTEGER ->
+            }
+
+            java.sql.Types.TINYINT, java.sql.Types.SMALLINT, java.sql.Types.INTEGER -> {
                 value.toIntOrNull() ?: value
-            java.sql.Types.BIGINT -> value.toLongOrNull() ?: value
-            java.sql.Types.FLOAT, java.sql.Types.REAL -> value.toFloatOrNull() ?: value
-            java.sql.Types.DOUBLE, java.sql.Types.DECIMAL, java.sql.Types.NUMERIC ->
+            }
+
+            java.sql.Types.BIGINT -> {
+                value.toLongOrNull() ?: value
+            }
+
+            java.sql.Types.FLOAT, java.sql.Types.REAL -> {
+                value.toFloatOrNull() ?: value
+            }
+
+            java.sql.Types.DOUBLE, java.sql.Types.DECIMAL, java.sql.Types.NUMERIC -> {
                 value.toDoubleOrNull() ?: value
-            else -> value
+            }
+
+            else -> {
+                value
+            }
         }
     }
 }

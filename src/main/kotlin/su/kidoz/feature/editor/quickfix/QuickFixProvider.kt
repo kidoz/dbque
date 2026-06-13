@@ -298,7 +298,9 @@ class QuickFixProvider {
                 pos
             }
 
-            else -> -1
+            else -> {
+                -1
+            }
         }
     }
 

@@ -227,11 +227,15 @@ private fun EditableCell(
                                     onCommitEdit()
                                     true
                                 }
+
                                 keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Escape -> {
                                     onCancelEdit()
                                     true
                                 }
-                                else -> false
+
+                                else -> {
+                                    false
+                                }
                             }
                         },
                 textStyle =

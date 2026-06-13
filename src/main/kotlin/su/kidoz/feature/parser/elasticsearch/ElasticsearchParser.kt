@@ -197,17 +197,30 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
 
         return when (queryType) {
             "bool" -> parseBoolQuery(valueObj, obj.pos)
+
             "match" -> parseMatchQuery(valueObj, obj.pos)
+
             "match_all" -> EsMatchAllQuery(valueObj?.get("boost")?.asFloat(), obj.pos)
+
             "term" -> parseTermQuery(valueObj, obj.pos)
+
             "terms" -> parseTermsQuery(valueObj, obj.pos)
+
             "range" -> parseRangeQuery(valueObj, obj.pos)
+
             "exists" -> valueObj?.get("field")?.asString()?.let { EsExistsQuery(it, obj.pos) }
+
             "wildcard" -> parseWildcardQuery(valueObj, obj.pos)
+
             "regexp" -> parseRegexpQuery(valueObj, obj.pos)
+
             "nested" -> parseNestedQuery(valueObj, obj.pos)
-            "match_phrase" -> parseMatchQuery(valueObj, obj.pos) // Similar structure
+
+            "match_phrase" -> parseMatchQuery(valueObj, obj.pos)
+
+            // Similar structure
             "prefix" -> parsePrefixAsWildcard(valueObj, obj.pos)
+
             else -> null
         }
     }
@@ -242,7 +255,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
         val (field, fieldValue) = obj.entries.firstOrNull() ?: return null
 
         return when (fieldValue) {
-            is JsonValue.Str -> EsMatchQuery(field, fieldValue.value, position = pos)
+            is JsonValue.Str -> {
+                EsMatchQuery(field, fieldValue.value, position = pos)
+            }
+
             is JsonValue.Obj -> {
                 val queryVal = fieldValue.fields["query"]?.asString() ?: ""
                 EsMatchQuery(
@@ -253,7 +269,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
                     position = pos,
                 )
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
@@ -275,7 +294,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
                     position = pos,
                 )
             }
-            else -> EsTermQuery(field, fieldValue.asAny() ?: return null, position = pos)
+
+            else -> {
+                EsTermQuery(field, fieldValue.asAny() ?: return null, position = pos)
+            }
         }
     }
 
@@ -320,12 +342,18 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
         val (field, fieldValue) = obj.entries.firstOrNull() ?: return null
 
         return when (fieldValue) {
-            is JsonValue.Str -> EsWildcardQuery(field, fieldValue.value, pos)
+            is JsonValue.Str -> {
+                EsWildcardQuery(field, fieldValue.value, pos)
+            }
+
             is JsonValue.Obj -> {
                 val value = fieldValue.fields["value"]?.asString() ?: return null
                 EsWildcardQuery(field, value, pos)
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
@@ -338,7 +366,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
         val (field, fieldValue) = obj.entries.firstOrNull() ?: return null
 
         return when (fieldValue) {
-            is JsonValue.Str -> EsRegexpQuery(field, fieldValue.value, position = pos)
+            is JsonValue.Str -> {
+                EsRegexpQuery(field, fieldValue.value, position = pos)
+            }
+
             is JsonValue.Obj -> {
                 val value = fieldValue.fields["value"]?.asString() ?: return null
                 EsRegexpQuery(
@@ -348,7 +379,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
                     position = pos,
                 )
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
@@ -406,26 +440,32 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
                     position = obj.pos,
                 )
             }
+
             "avg" in fields -> {
                 val avgObj = fields["avg"]?.asObject() ?: return null
                 EsAvgAgg(avgObj["field"]?.asString() ?: return null, obj.pos)
             }
+
             "sum" in fields -> {
                 val sumObj = fields["sum"]?.asObject() ?: return null
                 EsSumAgg(sumObj["field"]?.asString() ?: return null, obj.pos)
             }
+
             "min" in fields -> {
                 val minObj = fields["min"]?.asObject() ?: return null
                 EsMinAgg(minObj["field"]?.asString() ?: return null, obj.pos)
             }
+
             "max" in fields -> {
                 val maxObj = fields["max"]?.asObject() ?: return null
                 EsMaxAgg(maxObj["field"]?.asString() ?: return null, obj.pos)
             }
+
             "value_count" in fields -> {
                 val countObj = fields["value_count"]?.asObject()
                 EsCountAgg(countObj?.get("field")?.asString(), obj.pos)
             }
+
             "date_histogram" in fields -> {
                 val dhObj = fields["date_histogram"]?.asObject() ?: return null
                 EsDateHistogramAgg(
@@ -442,7 +482,10 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
                     position = obj.pos,
                 )
             }
-            else -> null
+
+            else -> {
+                null
+            }
         }
     }
 
@@ -459,22 +502,35 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
     private fun parseSort(arr: JsonValue.Arr): List<EsSort> {
         return arr.elements.mapNotNull { elem ->
             when (elem) {
-                is JsonValue.Str -> EsSort(elem.value, position = elem.pos)
+                is JsonValue.Str -> {
+                    EsSort(elem.value, position = elem.pos)
+                }
+
                 is JsonValue.Obj -> {
                     val (field, fieldValue) = elem.fields.entries.firstOrNull() ?: return@mapNotNull null
                     when (fieldValue) {
-                        is JsonValue.Str -> EsSort(field, fieldValue.value, position = elem.pos)
-                        is JsonValue.Obj ->
+                        is JsonValue.Str -> {
+                            EsSort(field, fieldValue.value, position = elem.pos)
+                        }
+
+                        is JsonValue.Obj -> {
                             EsSort(
                                 field = field,
                                 order = fieldValue.fields["order"]?.asString() ?: "asc",
                                 mode = fieldValue.fields["mode"]?.asString(),
                                 position = elem.pos,
                             )
-                        else -> null
+                        }
+
+                        else -> {
+                            null
+                        }
                     }
                 }
-                else -> null
+
+                else -> {
+                    null
+                }
             }
         }
     }
@@ -485,15 +541,25 @@ class ElasticsearchGrammar : Grammar<EsQuery>() {
 
     private fun parseSource(value: JsonValue): EsSource? =
         when (value) {
-            is JsonValue.Bool -> if (value.value) null else EsSource(excludes = listOf("*"), position = value.pos)
-            is JsonValue.Arr -> EsSource(includes = value.elements.mapNotNull { it.asString() }, position = value.pos)
-            is JsonValue.Obj ->
+            is JsonValue.Bool -> {
+                if (value.value) null else EsSource(excludes = listOf("*"), position = value.pos)
+            }
+
+            is JsonValue.Arr -> {
+                EsSource(includes = value.elements.mapNotNull { it.asString() }, position = value.pos)
+            }
+
+            is JsonValue.Obj -> {
                 EsSource(
                     includes = value.fields["includes"]?.asArray()?.mapNotNull { it.asString() },
                     excludes = value.fields["excludes"]?.asArray()?.mapNotNull { it.asString() },
                     position = value.pos,
                 )
-            else -> null
+            }
+
+            else -> {
+                null
+            }
         }
 
     // ========================================================================

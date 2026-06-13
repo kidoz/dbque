@@ -149,7 +149,11 @@ class QueryScopeAnalyzer {
                     afterWith = true
                     i += 4
                 }
-                sql[i] == '(' -> depth++
+
+                sql[i] == '(' -> {
+                    depth++
+                }
+
                 sql[i] == ')' -> {
                     depth--
                     if (depth == 0 && afterWith) {

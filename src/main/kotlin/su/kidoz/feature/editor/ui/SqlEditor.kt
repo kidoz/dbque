@@ -239,6 +239,7 @@ fun SqlEditor(
                                                 }
                                                 true
                                             }
+
                                             // Ctrl+Enter: Execute current query at cursor
                                             keyEvent.isCtrlPressed &&
                                                 !keyEvent.isShiftPressed &&
@@ -247,6 +248,7 @@ fun SqlEditor(
                                                 onEvent(EditorEvent.ExecuteCurrentQuery)
                                                 true
                                             }
+
                                             // Ctrl+Shift+Enter: Execute all queries
                                             keyEvent.isCtrlPressed &&
                                                 keyEvent.isShiftPressed &&
@@ -254,6 +256,7 @@ fun SqlEditor(
                                                 onEvent(EditorEvent.ExecuteAllQueries)
                                                 true
                                             }
+
                                             // Ctrl+E: Execute selected text (if any) or current query
                                             keyEvent.isCtrlPressed &&
                                                 !keyEvent.isShiftPressed &&
@@ -265,12 +268,16 @@ fun SqlEditor(
                                                 }
                                                 true
                                             }
+
                                             // Ctrl+L: Format SQL
                                             keyEvent.isCtrlPressed && keyEvent.key == Key.L -> {
                                                 onEvent(EditorEvent.Format)
                                                 true
                                             }
-                                            else -> false
+
+                                            else -> {
+                                                false
+                                            }
                                         }
                                     } else {
                                         false

@@ -47,7 +47,7 @@ fun DatabaseType.terminology(): DatabaseTerminology =
         DatabaseType.MYSQL,
         DatabaseType.SQLITE,
         DatabaseType.H2,
-        ->
+        -> {
             DatabaseTerminology(
                 category = DatabaseCategory.RELATIONAL,
                 tableLabel = "Tables",
@@ -61,7 +61,9 @@ fun DatabaseType.terminology(): DatabaseTerminology =
                 supportsViews = true,
                 supportsSchemas = true,
             )
-        DatabaseType.MONGODB ->
+        }
+
+        DatabaseType.MONGODB -> {
             DatabaseTerminology(
                 category = DatabaseCategory.DOCUMENT,
                 tableLabel = "Collections",
@@ -75,7 +77,9 @@ fun DatabaseType.terminology(): DatabaseTerminology =
                 supportsViews = false,
                 supportsSchemas = false,
             )
-        DatabaseType.ELASTICSEARCH ->
+        }
+
+        DatabaseType.ELASTICSEARCH -> {
             DatabaseTerminology(
                 category = DatabaseCategory.SEARCH_ENGINE,
                 tableLabel = "Indices",
@@ -89,4 +93,5 @@ fun DatabaseType.terminology(): DatabaseTerminology =
                 supportsViews = false,
                 supportsSchemas = false,
             )
+        }
     }

@@ -102,6 +102,7 @@ fun ConnectionDialog(
                             }
                         }
                     }
+
                     DatabaseType.MONGODB -> {
                         // MongoDB-specific fields
                         // Host and Port
@@ -180,6 +181,7 @@ fun ConnectionDialog(
                             Text("Use SSL/TLS")
                         }
                     }
+
                     DatabaseType.ELASTICSEARCH -> {
                         // Elasticsearch-specific fields
                         // Host and Port
@@ -238,6 +240,7 @@ fun ConnectionDialog(
                             Text("Use HTTPS")
                         }
                     }
+
                     else -> {
                         // Host and Port
                         Row(

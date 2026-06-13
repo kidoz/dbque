@@ -42,7 +42,10 @@ class QueryExecutorTest {
                         assertEquals(1, selectResult.rowCount)
                         assertEquals("alpha", selectResult.rows.first().first())
                     }
-                    else -> fail("Expected MultiResult, got $result")
+
+                    else -> {
+                        fail("Expected MultiResult, got $result")
+                    }
                 }
             }
         }

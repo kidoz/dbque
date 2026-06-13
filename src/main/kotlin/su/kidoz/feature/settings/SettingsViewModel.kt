@@ -14,26 +14,42 @@ class SettingsViewModel(
     override fun onEvent(event: SettingsEvent) {
         when (event) {
             is SettingsEvent.ShowDialog -> showDialog()
+
             is SettingsEvent.HideDialog -> hideDialog()
+
             is SettingsEvent.SelectTab -> selectTab(event.tab)
+
             // Editor settings
             is SettingsEvent.UpdateFontSize -> updateState { copy(fontSize = event.size) }
+
             is SettingsEvent.UpdateTabSize -> updateState { copy(tabSize = event.size) }
+
             is SettingsEvent.UpdateWordWrap -> updateState { copy(wordWrap = event.enabled) }
+
             is SettingsEvent.UpdateLineNumbers -> updateState { copy(lineNumbers = event.enabled) }
+
             is SettingsEvent.UpdateHighlightCurrentLine -> updateState { copy(highlightCurrentLine = event.enabled) }
+
             is SettingsEvent.UpdateAutoComplete -> updateState { copy(autoComplete = event.enabled) }
+
             // Results settings
             is SettingsEvent.UpdateMaxResultRows -> updateState { copy(maxResultRows = event.rows) }
+
             is SettingsEvent.UpdateNullDisplayText -> updateState { copy(nullDisplayText = event.text) }
+
             is SettingsEvent.UpdateDateTimeFormat -> updateState { copy(dateTimeFormat = event.format) }
+
             // Connection settings
             is SettingsEvent.UpdateConnectionTimeout -> updateState { copy(connectionTimeout = event.seconds) }
+
             is SettingsEvent.UpdateQueryTimeout -> updateState { copy(queryTimeout = event.seconds) }
+
             // Appearance settings
             is SettingsEvent.UpdateTheme -> updateState { copy(theme = event.theme) }
+
             // Actions
             is SettingsEvent.SaveSettings -> saveSettings()
+
             is SettingsEvent.ResetToDefaults -> resetToDefaults()
         }
     }

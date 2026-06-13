@@ -63,12 +63,17 @@ private fun getAppDataPath(): String {
     val userHome = System.getProperty("user.home")
     val appDataDir =
         when {
-            System.getProperty("os.name").lowercase().contains("mac") ->
+            System.getProperty("os.name").lowercase().contains("mac") -> {
                 File(userHome, "Library/Application Support/DBQue")
-            System.getProperty("os.name").lowercase().contains("win") ->
+            }
+
+            System.getProperty("os.name").lowercase().contains("win") -> {
                 File(System.getenv("APPDATA") ?: userHome, "DBQue")
-            else ->
+            }
+
+            else -> {
                 File(userHome, ".dbque")
+            }
         }
 
     if (!appDataDir.exists()) {

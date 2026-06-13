@@ -95,9 +95,16 @@ fun MainWindow() {
         connectionViewModel.effect
             .onEach { effect ->
                 when (effect) {
-                    is ConnectionEffect.ShowError -> snackbarHostState.showSnackbar(effect.message)
-                    is ConnectionEffect.ShowSuccess -> snackbarHostState.showSnackbar(effect.message)
+                    is ConnectionEffect.ShowError -> {
+                        snackbarHostState.showSnackbar(effect.message)
+                    }
+
+                    is ConnectionEffect.ShowSuccess -> {
+                        snackbarHostState.showSnackbar(effect.message)
+                    }
+
                     is ConnectionEffect.ConnectionEstablished -> {}
+
                     is ConnectionEffect.ConnectionClosed -> {}
                 }
             }.launchIn(this)
@@ -108,12 +115,15 @@ fun MainWindow() {
                     is EditorEffect.QueryExecuted -> {
                         resultsViewModel.onEvent(ResultsEvent.SetResults(effect.results))
                     }
+
                     is EditorEffect.QueryError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+
                     is EditorEffect.ShowMessage -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+
                     is EditorEffect.QuickFixesAvailable -> {
                         // Quick fixes are handled within SqlEditor component
                     }
@@ -126,18 +136,23 @@ fun MainWindow() {
                     is ExplorerEffect.InsertIntoEditor -> {
                         editorViewModel.insertText(effect.sql)
                     }
+
                     is ExplorerEffect.CopiedToClipboard -> {
                         snackbarHostState.showSnackbar("Copied to clipboard")
                     }
+
                     is ExplorerEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+
                     is ExplorerEffect.IndexCreated -> {
                         snackbarHostState.showSnackbar("Index '${effect.indexName}' created successfully")
                     }
+
                     is ExplorerEffect.IndexDeleted -> {
                         snackbarHostState.showSnackbar("Index '${effect.indexName}' deleted")
                     }
+
                     is ExplorerEffect.IndexUpdated -> {
                         snackbarHostState.showSnackbar("Index '${effect.indexName}' updated")
                     }
@@ -150,12 +165,15 @@ fun MainWindow() {
                     is HistoryEffect.InsertQuery -> {
                         editorViewModel.insertText(effect.query)
                     }
+
                     is HistoryEffect.CopiedToClipboard -> {
                         snackbarHostState.showSnackbar("Copied to clipboard")
                     }
+
                     is HistoryEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+
                     is HistoryEffect.ShowMessage -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
@@ -177,12 +195,15 @@ fun MainWindow() {
                     is SavedQueryEffect.InsertQuery -> {
                         editorViewModel.insertText(effect.query)
                     }
+
                     is SavedQueryEffect.CopiedToClipboard -> {
                         snackbarHostState.showSnackbar("Copied to clipboard")
                     }
+
                     is SavedQueryEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
+
                     is SavedQueryEffect.ShowMessage -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
@@ -195,9 +216,11 @@ fun MainWindow() {
                     is SettingsEffect.SettingsSaved -> {
                         snackbarHostState.showSnackbar("Settings saved")
                     }
+
                     is SettingsEffect.SettingsReset -> {
                         snackbarHostState.showSnackbar("Settings reset to defaults")
                     }
+
                     is SettingsEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }
@@ -312,6 +335,7 @@ fun MainWindow() {
                                                     modifier = Modifier.fillMaxSize(),
                                                 )
                                             }
+
                                             ResultsTab.QueryPlan -> {
                                                 val maxCost =
                                                     queryPlanState.planNodes
@@ -324,6 +348,7 @@ fun MainWindow() {
                                                     modifier = Modifier.fillMaxSize(),
                                                 )
                                             }
+
                                             ResultsTab.Issues -> {
                                                 val activeTab = editorState.activeTab
                                                 IssuesPanel(
@@ -338,6 +363,7 @@ fun MainWindow() {
                                                     modifier = Modifier.fillMaxSize(),
                                                 )
                                             }
+
                                             ResultsTab.History -> {
                                                 HistoryPanel(
                                                     state = historyState,

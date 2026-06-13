@@ -33,21 +33,66 @@ class SavedQueryViewModel(
 
     override fun onEvent(event: SavedQueryEvent) {
         when (event) {
-            is SavedQueryEvent.ShowNewQueryDialog -> showNewDialog()
-            is SavedQueryEvent.ShowEditQueryDialog -> showEditDialog(event.queryId)
-            is SavedQueryEvent.ShowSaveCurrentQueryDialog -> showSaveCurrentDialog(event.query)
-            is SavedQueryEvent.HideDialog -> hideDialog()
-            is SavedQueryEvent.UpdateName -> updateDialogField { copy(name = event.name) }
-            is SavedQueryEvent.UpdateQuery -> updateDialogField { copy(query = event.query) }
-            is SavedQueryEvent.UpdateDescription -> updateDialogField { copy(description = event.description) }
-            is SavedQueryEvent.UpdateFolder -> updateDialogField { copy(folder = event.folder) }
-            is SavedQueryEvent.SaveQuery -> saveQuery()
-            is SavedQueryEvent.DeleteQuery -> deleteQuery(event.queryId)
-            is SavedQueryEvent.UseQuery -> useQuery(event.queryId)
-            is SavedQueryEvent.CopyQuery -> copyQuery(event.queryId)
-            is SavedQueryEvent.SelectQuery -> selectQuery(event.queryId)
-            is SavedQueryEvent.ToggleFolder -> toggleFolder(event.folder)
-            is SavedQueryEvent.Search -> search(event.text)
+            is SavedQueryEvent.ShowNewQueryDialog -> {
+                showNewDialog()
+            }
+
+            is SavedQueryEvent.ShowEditQueryDialog -> {
+                showEditDialog(event.queryId)
+            }
+
+            is SavedQueryEvent.ShowSaveCurrentQueryDialog -> {
+                showSaveCurrentDialog(event.query)
+            }
+
+            is SavedQueryEvent.HideDialog -> {
+                hideDialog()
+            }
+
+            is SavedQueryEvent.UpdateName -> {
+                updateDialogField { copy(name = event.name) }
+            }
+
+            is SavedQueryEvent.UpdateQuery -> {
+                updateDialogField { copy(query = event.query) }
+            }
+
+            is SavedQueryEvent.UpdateDescription -> {
+                updateDialogField { copy(description = event.description) }
+            }
+
+            is SavedQueryEvent.UpdateFolder -> {
+                updateDialogField { copy(folder = event.folder) }
+            }
+
+            is SavedQueryEvent.SaveQuery -> {
+                saveQuery()
+            }
+
+            is SavedQueryEvent.DeleteQuery -> {
+                deleteQuery(event.queryId)
+            }
+
+            is SavedQueryEvent.UseQuery -> {
+                useQuery(event.queryId)
+            }
+
+            is SavedQueryEvent.CopyQuery -> {
+                copyQuery(event.queryId)
+            }
+
+            is SavedQueryEvent.SelectQuery -> {
+                selectQuery(event.queryId)
+            }
+
+            is SavedQueryEvent.ToggleFolder -> {
+                toggleFolder(event.folder)
+            }
+
+            is SavedQueryEvent.Search -> {
+                search(event.text)
+            }
+
             is SavedQueryEvent.Refresh -> {} // Automatic via Flow
         }
     }

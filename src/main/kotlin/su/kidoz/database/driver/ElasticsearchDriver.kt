@@ -248,6 +248,7 @@ class ElasticsearchDriver : DatabaseDriver {
                     ordinal = extractNestedFieldsWithLimit(fullName, nestedProp, fields, ordinal, limit)
                 }
             }
+
             property.isNested() -> {
                 property.nested().properties()?.forEach { (nestedName, nestedProp) ->
                     if (fields.size >= limit) return ordinal

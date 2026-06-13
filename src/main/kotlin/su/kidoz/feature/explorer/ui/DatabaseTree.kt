@@ -952,6 +952,7 @@ private fun canExpand(node: TreeNode): Boolean =
         is TreeNode.FieldsFolder, is TreeNode.IndexNodeElasticsearch,
         is TreeNode.IndexFieldsFolder,
         -> true
+
         else -> false
     }
 
@@ -960,30 +961,69 @@ private fun getNodeIcon(
     terminology: DatabaseTerminology?,
 ): ImageVector =
     when (node) {
-        is TreeNode.DatabaseNode -> Icons.Default.Storage
-        is TreeNode.SchemaNode -> Icons.Default.Schema
-        is TreeNode.TablesFolder ->
+        is TreeNode.DatabaseNode -> {
+            Icons.Default.Storage
+        }
+
+        is TreeNode.SchemaNode -> {
+            Icons.Default.Schema
+        }
+
+        is TreeNode.TablesFolder -> {
             when (terminology?.category) {
                 DatabaseCategory.DOCUMENT -> Icons.Default.Folder
                 DatabaseCategory.SEARCH_ENGINE -> Icons.Default.Search
                 else -> Icons.Default.TableChart
             }
-        is TreeNode.ViewsFolder -> Icons.AutoMirrored.Filled.ViewList
-        is TreeNode.ColumnsFolder -> Icons.Default.ViewColumn
-        is TreeNode.IndexesFolder -> Icons.AutoMirrored.Filled.Sort
-        is TreeNode.FieldsFolder -> Icons.Default.ViewColumn
-        is TreeNode.IndexFieldsFolder -> Icons.Default.ViewColumn
-        is TreeNode.IndexNodeElasticsearch -> Icons.Default.Inventory
-        is TreeNode.TableNode ->
+        }
+
+        is TreeNode.ViewsFolder -> {
+            Icons.AutoMirrored.Filled.ViewList
+        }
+
+        is TreeNode.ColumnsFolder -> {
+            Icons.Default.ViewColumn
+        }
+
+        is TreeNode.IndexesFolder -> {
+            Icons.AutoMirrored.Filled.Sort
+        }
+
+        is TreeNode.FieldsFolder -> {
+            Icons.Default.ViewColumn
+        }
+
+        is TreeNode.IndexFieldsFolder -> {
+            Icons.Default.ViewColumn
+        }
+
+        is TreeNode.IndexNodeElasticsearch -> {
+            Icons.Default.Inventory
+        }
+
+        is TreeNode.TableNode -> {
             when (terminology?.category) {
                 DatabaseCategory.DOCUMENT -> Icons.Default.Description
                 DatabaseCategory.SEARCH_ENGINE -> Icons.Default.Inventory
                 else -> Icons.Default.TableRows
             }
-        is TreeNode.CollectionNode -> Icons.Default.Description
-        is TreeNode.ViewNode -> Icons.Default.RemoveRedEye
-        is TreeNode.ColumnNode -> Icons.Default.ViewColumn
-        is TreeNode.IndexNode -> Icons.AutoMirrored.Filled.Sort
+        }
+
+        is TreeNode.CollectionNode -> {
+            Icons.Default.Description
+        }
+
+        is TreeNode.ViewNode -> {
+            Icons.Default.RemoveRedEye
+        }
+
+        is TreeNode.ColumnNode -> {
+            Icons.Default.ViewColumn
+        }
+
+        is TreeNode.IndexNode -> {
+            Icons.AutoMirrored.Filled.Sort
+        }
     }
 
 @Composable
@@ -993,12 +1033,19 @@ private fun getNodeColor(node: TreeNode): androidx.compose.ui.graphics.Color =
         is TreeNode.ColumnsFolder, is TreeNode.IndexesFolder,
         is TreeNode.FieldsFolder, is TreeNode.IndexFieldsFolder,
         -> DBQueTheme.extendedColors.treeFolder
+
         is TreeNode.TableNode -> DBQueTheme.extendedColors.treeTable
+
         is TreeNode.CollectionNode -> DBQueTheme.extendedColors.treeTable
+
         is TreeNode.IndexNodeElasticsearch -> DBQueTheme.extendedColors.treeTable
+
         is TreeNode.ViewNode -> DBQueTheme.extendedColors.treeView
+
         is TreeNode.ColumnNode -> DBQueTheme.extendedColors.treeColumn
+
         is TreeNode.IndexNode -> DBQueTheme.extendedColors.treeIndex
+
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1007,17 +1054,24 @@ private fun getNodeDisplayText(
     terminology: DatabaseTerminology?,
 ): String =
     when (node) {
-        is TreeNode.TablesFolder -> terminology?.tableLabel ?: "Tables"
+        is TreeNode.TablesFolder -> {
+            terminology?.tableLabel ?: "Tables"
+        }
+
         is TreeNode.ColumnNode -> {
             val pk = if (node.column.autoIncrement) " PK" else ""
             val nullable = if (node.column.nullable) "" else " NOT NULL"
             "${node.name} : ${node.column.typeDisplay}$pk$nullable"
         }
+
         is TreeNode.IndexNode -> {
             val columns = node.index.columns.joinToString(", ")
             "${node.name} ($columns)"
         }
-        else -> node.name
+
+        else -> {
+            node.name
+        }
     }
 
 private fun getNodeSuffix(node: TreeNode): String? =
@@ -1045,6 +1099,7 @@ private fun buildContextMenuItems(
                     )
                 }
             }
+
             is TreeNode.TableNode -> {
                 add(
                     ContextMenuItem(terminology?.selectAction ?: "SELECT * FROM...") {
@@ -1081,6 +1136,7 @@ private fun buildContextMenuItems(
                     )
                 }
             }
+
             is TreeNode.CollectionNode -> {
                 add(
                     ContextMenuItem("db.find({})...") {
@@ -1098,6 +1154,7 @@ private fun buildContextMenuItems(
                     },
                 )
             }
+
             is TreeNode.ViewNode -> {
                 add(
                     ContextMenuItem(terminology?.selectAction ?: "SELECT * FROM...") {
@@ -1105,6 +1162,7 @@ private fun buildContextMenuItems(
                     },
                 )
             }
+
             else -> {}
         }
     }

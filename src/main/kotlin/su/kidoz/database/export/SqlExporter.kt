@@ -64,10 +64,13 @@ class SqlExporter {
 
         return when (jdbcType) {
             Types.BOOLEAN, Types.BIT -> if (value as? Boolean == true) "TRUE" else "FALSE"
+
             Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT,
             Types.FLOAT, Types.REAL, Types.DOUBLE, Types.DECIMAL, Types.NUMERIC,
             -> value.toString()
+
             Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> "NULL /* BINARY */"
+
             else -> "'${escapeString(value.toString())}'"
         }
     }

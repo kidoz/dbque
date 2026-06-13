@@ -459,6 +459,7 @@ class EditorViewModel(
                                         null,
                                     )
                                 }
+
                                 is QueryExecutionResult.MultiResult -> {
                                     allResults.addAll(result.results)
                                     val totalRows = result.results.sumOf { it.rowCount }
@@ -471,6 +472,7 @@ class EditorViewModel(
                                         null,
                                     )
                                 }
+
                                 is QueryExecutionResult.Error -> {
                                     saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
                                     sendEffect(
@@ -551,12 +553,14 @@ class EditorViewModel(
                     )
                     sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
                 }
+
                 is QueryExecutionResult.MultiResult -> {
                     val totalRows = result.results.sumOf { it.rowCount }
                     val totalTime = System.currentTimeMillis() - startTime
                     saveToHistory(activeConnection.config.id, query, totalTime, totalRows, true, null)
                     sendEffect(EditorEffect.QueryExecuted(result.results))
                 }
+
                 is QueryExecutionResult.Error -> {
                     saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
                     sendEffect(EditorEffect.QueryError(result.message))
@@ -583,11 +587,13 @@ class EditorViewModel(
                 )
                 sendEffect(EditorEffect.QueryExecuted(listOf(result.result)))
             }
+
             is QueryExecutionResult.MultiResult -> {
                 val totalRows = result.results.sumOf { it.rowCount }
                 saveToHistory(activeConnection.config.id, query, 0, totalRows, true, null)
                 sendEffect(EditorEffect.QueryExecuted(result.results))
             }
+
             is QueryExecutionResult.Error -> {
                 saveToHistory(activeConnection.config.id, query, 0, 0, false, result.message)
                 sendEffect(EditorEffect.QueryError(result.message))

@@ -32,9 +32,11 @@ data class ActiveConnection(
     fun getConnection(): Connection =
         when (val conn = databaseConnection) {
             is JdbcDatabaseConnection -> conn.getJdbcConnection()
+
             is MongoDatabaseConnection -> throw IllegalStateException(
                 "Cannot get JDBC Connection from MongoDB. Use getMongoConnection() instead.",
             )
+
             is ElasticsearchDatabaseConnection -> throw IllegalStateException(
                 "Cannot get JDBC Connection from Elasticsearch. Use getElasticsearchConnection() instead.",
             )
@@ -47,9 +49,11 @@ data class ActiveConnection(
     fun getMongoConnection(): MongoDatabaseConnection =
         when (val conn = databaseConnection) {
             is MongoDatabaseConnection -> conn
+
             is JdbcDatabaseConnection -> throw IllegalStateException(
                 "Cannot get MongoDB connection from JDBC database. Use getConnection() instead.",
             )
+
             is ElasticsearchDatabaseConnection -> throw IllegalStateException(
                 "Cannot get MongoDB connection from Elasticsearch. Use getElasticsearchConnection() instead.",
             )
@@ -62,9 +66,11 @@ data class ActiveConnection(
     fun getElasticsearchConnection(): ElasticsearchDatabaseConnection =
         when (val conn = databaseConnection) {
             is ElasticsearchDatabaseConnection -> conn
+
             is JdbcDatabaseConnection -> throw IllegalStateException(
                 "Cannot get Elasticsearch connection from JDBC database. Use getConnection() instead.",
             )
+
             is MongoDatabaseConnection -> throw IllegalStateException(
                 "Cannot get Elasticsearch connection from MongoDB. Use getMongoConnection() instead.",
             )

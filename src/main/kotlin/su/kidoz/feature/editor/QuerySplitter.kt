@@ -59,28 +59,34 @@ object QuerySplitter {
                 content.startsWith("--", i) -> {
                     i = skipToEndOfLine(content, i)
                 }
+
                 // Multi-line comment
                 content.startsWith("/*", i) -> {
                     i = skipMultiLineComment(content, i)
                 }
+
                 // Single-quoted string
                 content[i] == '\'' -> {
                     i = skipString(content, i, '\'')
                 }
+
                 // Double-quoted identifier
                 content[i] == '"' -> {
                     i = skipString(content, i, '"')
                 }
+
                 // Dollar-quoted string (PostgreSQL)
                 content.startsWith("\$\$", i) -> {
                     i = skipDollarQuotedString(content, i)
                 }
+
                 // Custom dollar tag like $tag$...$tag$
                 content[i] == '$' &&
                     i + 1 < content.length &&
                     (content[i + 1].isLetter() || content[i + 1] == '_') -> {
                     i = skipCustomDollarTag(content, i)
                 }
+
                 // Semicolon - query separator
                 content[i] == ';' -> {
                     val queryText = content.substring(queryStart, i).trim()
@@ -100,7 +106,10 @@ object QuerySplitter {
                     queryStart = i + 1
                     i++
                 }
-                else -> i++
+
+                else -> {
+                    i++
+                }
             }
         }
 
@@ -182,15 +191,20 @@ object QuerySplitter {
                 content[i] == quote && i + 1 < content.length && content[i + 1] == quote -> {
                     i += 2
                 }
+
                 // End of string
                 content[i] == quote -> {
                     return i + 1
                 }
+
                 // Backslash escape
                 content[i] == '\\' && i + 1 < content.length -> {
                     i += 2
                 }
-                else -> i++
+
+                else -> {
+                    i++
+                }
             }
         }
         return content.length

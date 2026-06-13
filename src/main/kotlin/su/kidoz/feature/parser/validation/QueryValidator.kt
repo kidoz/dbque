@@ -101,22 +101,27 @@ private fun formatParseErrorMessage(
                 "Syntax error: unexpected token$positionInfo"
             }
         }
+
         // Unexpected end of input
         message.contains("UnexpectedEof") -> {
             "Syntax error: unexpected end of input, query may be incomplete$positionInfo"
         }
+
         // Could not parse - alternatives failure
         message.contains("AlternativesFailure") || message.contains("Could not parse") -> {
             "Syntax error: could not parse $queryType query$positionInfo"
         }
+
         // No tokens matched
         message.contains("NoMatchingToken") -> {
             "Syntax error: unrecognized character or token$positionInfo"
         }
+
         // Generic fallback - don't expose internal details
         message.length > 100 -> {
             "Syntax error in $queryType query$positionInfo"
         }
+
         else -> {
             // For short, simple messages, use them directly
             "Syntax error: ${message.take(80)}"
@@ -328,6 +333,7 @@ class SqlValidator(
                     )
                 }
             }
+
             is SubqueryReference -> {
                 validateSelect(ref.subquery, issues)
             }
@@ -361,12 +367,20 @@ class SqlValidator(
                     checkTypeCoercion(expr.left, expr.right, issues)
                 }
             }
-            is UnaryExpression -> validateExpression(expr.operand, issues)
+
+            is UnaryExpression -> {
+                validateExpression(expr.operand, issues)
+            }
+
             is FunctionCall -> {
                 expr.arguments.forEach { validateExpression(it, issues) }
                 validateFunctionCall(expr, issues)
             }
-            is ListExpression -> expr.elements.forEach { validateExpression(it, issues) }
+
+            is ListExpression -> {
+                expr.elements.forEach { validateExpression(it, issues) }
+            }
+
             is CaseExpression -> {
                 expr.operand?.let { validateExpression(it, issues) }
                 expr.whenClauses.forEach {
@@ -375,7 +389,11 @@ class SqlValidator(
                 }
                 expr.elseResult?.let { validateExpression(it, issues) }
             }
-            is SelectStatement -> validateSelect(expr, issues)
+
+            is SelectStatement -> {
+                validateSelect(expr, issues)
+            }
+
             else -> {}
         }
     }
@@ -400,6 +418,7 @@ class SqlValidator(
                     )
                 }
             }
+
             "COALESCE" -> {
                 if (func.arguments.size < 2) {
                     issues.add(
@@ -497,9 +516,18 @@ class SqlValidator(
                 expr.name.name.uppercase() in windowFunctions ||
                     expr.arguments.any { hasWindowFunction(it) }
             }
-            is BinaryExpression -> hasWindowFunction(expr.left) || hasWindowFunction(expr.right)
-            is UnaryExpression -> hasWindowFunction(expr.operand)
-            else -> false
+
+            is BinaryExpression -> {
+                hasWindowFunction(expr.left) || hasWindowFunction(expr.right)
+            }
+
+            is UnaryExpression -> {
+                hasWindowFunction(expr.operand)
+            }
+
+            else -> {
+                false
+            }
         }
 
     private fun validateInsert(
@@ -646,16 +674,46 @@ class MongoValidator(
         issues: MutableList<ValidationIssue>,
     ) {
         when (node) {
-            is MongoQuery -> validateQuery(node, issues)
-            is MongoAggregation -> validateAggregation(node, issues)
-            is MongoFilter -> validateFilter(node, issues)
-            is MongoUpdate -> validateUpdate(node, issues)
-            is MongoInsert -> validateInsert(node, issues)
-            is MongoDelete -> validateDelete(node, issues)
-            is MongoFindAndModify -> validateFindAndModify(node, issues)
-            is MongoCount -> validateCount(node, issues)
-            is MongoDistinct -> validateDistinct(node, issues)
-            is MongoIndexOp -> validateIndexOp(node, issues)
+            is MongoQuery -> {
+                validateQuery(node, issues)
+            }
+
+            is MongoAggregation -> {
+                validateAggregation(node, issues)
+            }
+
+            is MongoFilter -> {
+                validateFilter(node, issues)
+            }
+
+            is MongoUpdate -> {
+                validateUpdate(node, issues)
+            }
+
+            is MongoInsert -> {
+                validateInsert(node, issues)
+            }
+
+            is MongoDelete -> {
+                validateDelete(node, issues)
+            }
+
+            is MongoFindAndModify -> {
+                validateFindAndModify(node, issues)
+            }
+
+            is MongoCount -> {
+                validateCount(node, issues)
+            }
+
+            is MongoDistinct -> {
+                validateDistinct(node, issues)
+            }
+
+            is MongoIndexOp -> {
+                validateIndexOp(node, issues)
+            }
+
             else -> {}
         }
     }
@@ -803,7 +861,10 @@ class MongoValidator(
         }
 
         when (stage) {
-            is MatchStage -> validateFilter(stage.filter, issues)
+            is MatchStage -> {
+                validateFilter(stage.filter, issues)
+            }
+
             is LookupStage -> {
                 if (stage.from.isEmpty()) {
                     issues.add(
@@ -826,6 +887,7 @@ class MongoValidator(
                     )
                 }
             }
+
             is GroupStage -> {
                 // Validate _id field
                 if (stage.id is MongoScalar && stage.id.value == null) {
@@ -839,6 +901,7 @@ class MongoValidator(
                     )
                 }
             }
+
             is UnwindStage -> {
                 if (stage.path.isEmpty()) {
                     issues.add(
@@ -862,6 +925,7 @@ class MongoValidator(
                     )
                 }
             }
+
             is BucketStage -> {
                 if (stage.boundaries.elements.size < 2) {
                     issues.add(
@@ -874,6 +938,7 @@ class MongoValidator(
                     )
                 }
             }
+
             is FacetStage -> {
                 // Check for nested $out or $merge in facets (not allowed)
                 stage.facets.values.forEach { pipeline ->
@@ -891,6 +956,7 @@ class MongoValidator(
                     }
                 }
             }
+
             is SampleStage -> {
                 if (stage.size <= 0) {
                     issues.add(
@@ -903,6 +969,7 @@ class MongoValidator(
                     )
                 }
             }
+
             is GenericStage -> {
                 // Unknown stage - might be a typo or unsupported
                 issues.add(
@@ -914,6 +981,7 @@ class MongoValidator(
                     ),
                 )
             }
+
             else -> {}
         }
     }
@@ -1116,6 +1184,7 @@ class MongoValidator(
                     )
                 }
             }
+
             MongoOperationType.DROP_INDEX -> {
                 if (indexOp.keys == null && indexOp.indexName == null) {
                     issues.add(
@@ -1128,6 +1197,7 @@ class MongoValidator(
                     )
                 }
             }
+
             else -> {}
         }
     }
@@ -1204,6 +1274,7 @@ class MongoValidator(
                 // Validate operator-specific rules
                 validateOperatorValue(filter, issues)
             }
+
             is MongoLogicalFilter -> {
                 filter.filters.forEach { validateFilter(it, issues) }
 
@@ -1251,6 +1322,7 @@ class MongoValidator(
                     )
                 }
             }
+
             MongoOperator.EXISTS -> {
                 val value = (filter.value as? MongoScalar)?.value
                 if (value !is Boolean) {
@@ -1264,6 +1336,7 @@ class MongoValidator(
                     )
                 }
             }
+
             MongoOperator.SIZE -> {
                 val value = (filter.value as? MongoScalar)?.value
                 if (value !is Number || value.toInt() < 0) {
@@ -1277,6 +1350,7 @@ class MongoValidator(
                     )
                 }
             }
+
             MongoOperator.ELEM_MATCH -> {
                 if (filter.value !is MongoObject) {
                     issues.add(
@@ -1289,6 +1363,7 @@ class MongoValidator(
                     )
                 }
             }
+
             else -> {}
         }
     }
@@ -1370,6 +1445,7 @@ class ElasticsearchValidator(
                 clause.mustNot.forEach { validateClause(it, issues) }
                 clause.filter.forEach { validateClause(it, issues) }
             }
+
             is EsMatchQuery -> {
                 if (clause.query.isBlank()) {
                     issues.add(
@@ -1382,6 +1458,7 @@ class ElasticsearchValidator(
                     )
                 }
             }
+
             is EsWildcardQuery -> {
                 if (clause.value.startsWith("*")) {
                     issues.add(
@@ -1394,6 +1471,7 @@ class ElasticsearchValidator(
                     )
                 }
             }
+
             is EsRegexpQuery -> {
                 issues.add(
                     ValidationIssue(
@@ -1404,9 +1482,11 @@ class ElasticsearchValidator(
                     ),
                 )
             }
+
             is EsNestedQuery -> {
                 validateClause(clause.query, issues)
             }
+
             else -> {}
         }
     }
@@ -1429,9 +1509,11 @@ class ElasticsearchValidator(
                 }
                 agg.subAggs?.values?.forEach { validateAggregation(it, issues) }
             }
+
             is EsDateHistogramAgg -> {
                 agg.subAggs?.values?.forEach { validateAggregation(it, issues) }
             }
+
             else -> {}
         }
     }

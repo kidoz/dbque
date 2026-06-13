@@ -281,6 +281,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     filters.add(MongoLogicalFilter(MongoLogicalOperator.AND, subFilters, obj.position))
                 }
+
                 key == "\$or" && value is MongoArray -> {
                     val subFilters =
                         value.elements.mapNotNull {
@@ -288,6 +289,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     filters.add(MongoLogicalFilter(MongoLogicalOperator.OR, subFilters, obj.position))
                 }
+
                 key == "\$nor" && value is MongoArray -> {
                     val subFilters =
                         value.elements.mapNotNull {
@@ -295,6 +297,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     filters.add(MongoLogicalFilter(MongoLogicalOperator.NOR, subFilters, obj.position))
                 }
+
                 key == "\$not" && value is MongoObject -> {
                     filters.add(
                         MongoLogicalFilter(
@@ -304,6 +307,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                         ),
                     )
                 }
+
                 // Field with operators
                 value is MongoObject && value.fields.keys.any { it.startsWith("\$") } -> {
                     for ((op, opValue) in value.fields) {
@@ -313,6 +317,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     }
                 }
+
                 // Direct equality
                 else -> {
                     filters.add(MongoFieldFilter(key, MongoOperator.EQ, value, obj.position))
@@ -321,15 +326,22 @@ class MongoGrammar : Grammar<MongoNode>() {
         }
 
         return when {
-            filters.isEmpty() ->
+            filters.isEmpty() -> {
                 MongoFieldFilter(
                     "_id",
                     MongoOperator.EXISTS,
                     MongoScalar(true, obj.position),
                     obj.position,
                 )
-            filters.size == 1 -> filters.first()
-            else -> MongoLogicalFilter(MongoLogicalOperator.AND, filters, obj.position)
+            }
+
+            filters.size == 1 -> {
+                filters.first()
+            }
+
+            else -> {
+                MongoLogicalFilter(MongoLogicalOperator.AND, filters, obj.position)
+            }
         }
     }
 
@@ -343,12 +355,13 @@ class MongoGrammar : Grammar<MongoNode>() {
                 ?: return GenericStage("unknown", obj, obj.position)
 
         return when (stageType) {
-            "\$match" ->
+            "\$match" -> {
                 (stageValue as? MongoObject)?.let {
                     MatchStage(parseFilter(it), obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$project" ->
+            "\$project" -> {
                 (stageValue as? MongoObject)?.let { projObj ->
                     val fields =
                         projObj.fields.mapValues { (_, v) ->
@@ -359,8 +372,9 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     ProjectStage(MongoProjection(fields, projObj.position), obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$group" ->
+            "\$group" -> {
                 (stageValue as? MongoObject)?.let { groupObj ->
                     val id = groupObj.fields["_id"] ?: MongoScalar(null, obj.position)
                     val accumulators =
@@ -374,8 +388,9 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     GroupStage(id, accumulators, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$sort" ->
+            "\$sort" -> {
                 (stageValue as? MongoObject)?.let { sortObj ->
                     val fields =
                         sortObj.fields.mapValues { (_, v) ->
@@ -383,18 +398,21 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     SortStage(MongoSort(fields, sortObj.position), obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$limit" ->
+            "\$limit" -> {
                 (stageValue as? MongoScalar)?.value?.let {
                     LimitStage((it as Number).toInt(), obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$skip" ->
+            "\$skip" -> {
                 (stageValue as? MongoScalar)?.value?.let {
                     SkipStage((it as Number).toInt(), obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$lookup" ->
+            "\$lookup" -> {
                 (stageValue as? MongoObject)?.let { lookupObj ->
                     val from = (lookupObj.fields["from"] as? MongoScalar)?.value as? String ?: ""
                     val localField = (lookupObj.fields["localField"] as? MongoScalar)?.value as? String ?: ""
@@ -402,33 +420,44 @@ class MongoGrammar : Grammar<MongoNode>() {
                     val alias = (lookupObj.fields["as"] as? MongoScalar)?.value as? String ?: ""
                     LookupStage(from, localField, foreignField, alias, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$unwind" ->
+            "\$unwind" -> {
                 when (stageValue) {
-                    is MongoScalar -> UnwindStage(stageValue.value as? String ?: "", false, obj.position)
+                    is MongoScalar -> {
+                        UnwindStage(stageValue.value as? String ?: "", false, obj.position)
+                    }
+
                     is MongoObject -> {
                         val path = (stageValue.fields["path"] as? MongoScalar)?.value as? String ?: ""
                         val preserve = (stageValue.fields["preserveNullAndEmptyArrays"] as? MongoScalar)?.value as? Boolean ?: false
                         UnwindStage(path, preserve, obj.position)
                     }
-                    else -> GenericStage(stageType, stageValue, obj.position)
-                }
 
-            "\$addFields", "\$set" ->
+                    else -> {
+                        GenericStage(stageType, stageValue, obj.position)
+                    }
+                }
+            }
+
+            "\$addFields", "\$set" -> {
                 (stageValue as? MongoObject)?.let { fieldsObj ->
                     AddFieldsStage(fieldsObj.fields, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$replaceRoot" ->
+            "\$replaceRoot" -> {
                 (stageValue as? MongoObject)?.let { replaceObj ->
                     val newRoot = replaceObj.fields["newRoot"] ?: stageValue
                     ReplaceRootStage(newRoot, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$replaceWith" ->
+            "\$replaceWith" -> {
                 ReplaceRootStage(stageValue, obj.position)
+            }
 
-            "\$facet" ->
+            "\$facet" -> {
                 (stageValue as? MongoObject)?.let { facetObj ->
                     val facets =
                         facetObj.fields.mapValues { (_, v) ->
@@ -438,8 +467,9 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     FacetStage(facets, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$bucket" ->
+            "\$bucket" -> {
                 (stageValue as? MongoObject)?.let { bucketObj ->
                     val groupBy = bucketObj.fields["groupBy"] ?: MongoScalar(null, obj.position)
                     val boundaries =
@@ -457,8 +487,9 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     BucketStage(groupBy, boundaries, defaultBucket, output, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$bucketAuto" ->
+            "\$bucketAuto" -> {
                 (stageValue as? MongoObject)?.let { bucketObj ->
                     val groupBy = bucketObj.fields["groupBy"] ?: MongoScalar(null, obj.position)
                     val buckets =
@@ -477,24 +508,33 @@ class MongoGrammar : Grammar<MongoNode>() {
                         }
                     BucketAutoStage(groupBy, buckets, output, granularity, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$count" ->
+            "\$count" -> {
                 (stageValue as? MongoScalar)?.value?.let {
                     CountStage(it as String, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$out" ->
+            "\$out" -> {
                 when (stageValue) {
-                    is MongoScalar -> OutStage(stageValue.value as? String ?: "", null, obj.position)
+                    is MongoScalar -> {
+                        OutStage(stageValue.value as? String ?: "", null, obj.position)
+                    }
+
                     is MongoObject -> {
                         val db = (stageValue.fields["db"] as? MongoScalar)?.value as? String
                         val coll = (stageValue.fields["coll"] as? MongoScalar)?.value as? String ?: ""
                         OutStage(coll, db, obj.position)
                     }
-                    else -> GenericStage(stageType, stageValue, obj.position)
-                }
 
-            "\$merge" ->
+                    else -> {
+                        GenericStage(stageType, stageValue, obj.position)
+                    }
+                }
+            }
+
+            "\$merge" -> {
                 (stageValue as? MongoObject)?.let { mergeObj ->
                     val into =
                         when (val intoVal = mergeObj.fields["into"]) {
@@ -510,8 +550,9 @@ class MongoGrammar : Grammar<MongoNode>() {
                     val whenNotMatched = (mergeObj.fields["whenNotMatched"] as? MongoScalar)?.value as? String
                     MergeStage(into, on, whenMatched, whenNotMatched, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$sample" ->
+            "\$sample" -> {
                 (stageValue as? MongoObject)?.let { sampleObj ->
                     val size =
                         (sampleObj.fields["size"] as? MongoScalar)?.value?.let {
@@ -519,12 +560,16 @@ class MongoGrammar : Grammar<MongoNode>() {
                         } ?: 1
                     SampleStage(size, obj.position)
                 } ?: GenericStage(stageType, stageValue, obj.position)
+            }
 
-            "\$redact" ->
+            "\$redact" -> {
                 RedactStage(stageValue, obj.position)
+            }
 
             // Generic fallback for unsupported stages
-            else -> GenericStage(stageType, stageValue, obj.position)
+            else -> {
+                GenericStage(stageType, stageValue, obj.position)
+            }
         }
     }
 
@@ -606,7 +651,7 @@ class MongoGrammar : Grammar<MongoNode>() {
 
         for ((mod, value) in modifiers) {
             when (mod) {
-                "sort" ->
+                "sort" -> {
                     sort =
                         MongoSort(
                             (value as MongoObject).fields.mapValues { (_, v) ->
@@ -614,17 +659,30 @@ class MongoGrammar : Grammar<MongoNode>() {
                             },
                             value.position,
                         )
-                "limit" -> limit = ((value as MongoScalar).value as Number).toInt()
-                "skip" -> skip = ((value as MongoScalar).value as Number).toInt()
-                "hint" ->
+                }
+
+                "limit" -> {
+                    limit = ((value as MongoScalar).value as Number).toInt()
+                }
+
+                "skip" -> {
+                    skip = ((value as MongoScalar).value as Number).toInt()
+                }
+
+                "hint" -> {
                     hint =
                         when (value) {
                             is MongoScalar -> value.value as? String
                             is MongoObject -> value.fields.keys.firstOrNull()
                             else -> null
                         }
-                "explain" -> explain = true
-                "project" ->
+                }
+
+                "explain" -> {
+                    explain = true
+                }
+
+                "project" -> {
                     projection =
                         (value as MongoObject).let { p ->
                             MongoProjection(
@@ -632,6 +690,7 @@ class MongoGrammar : Grammar<MongoNode>() {
                                 p.position,
                             )
                         }
+                }
             }
         }
         return ModifierData(sort, limit, skip, hint, explain, projection)
@@ -1174,10 +1233,14 @@ object MongoParser {
         try {
             val node = grammar.parseToEnd(json)
             when (node) {
-                is MongoQuery ->
+                is MongoQuery -> {
                     node.filter?.let { Result.success(it) }
                         ?: Result.failure(IllegalArgumentException("No filter found"))
-                else -> Result.failure(IllegalArgumentException("Expected query, got ${node::class.simpleName}"))
+                }
+
+                else -> {
+                    Result.failure(IllegalArgumentException("Expected query, got ${node::class.simpleName}"))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)

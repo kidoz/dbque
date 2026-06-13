@@ -187,6 +187,7 @@ class AutocompleteProvider(
                     results.addAll(getTableSuggestions(currentWord))
                     results.addAll(getCTESuggestions(scope, currentWord))
                 }
+
                 AutocompleteContext.AFTER_SELECT, AutocompleteContext.AFTER_WHERE,
                 AutocompleteContext.AFTER_SET, AutocompleteContext.AFTER_ORDER_BY,
                 -> {
@@ -196,6 +197,7 @@ class AutocompleteProvider(
                     results.addAll(getTableSuggestions(currentWord))
                     results.addAll(getFunctionSuggestionsEnhanced(currentWord))
                 }
+
                 AutocompleteContext.AFTER_DOT -> {
                     // Suggest columns for the table/alias before the dot
                     val tableOrAlias = scopeAnalyzer.getTableBeforeDot(beforeCursor, beforeCursor.length - 1)
@@ -203,10 +205,12 @@ class AutocompleteProvider(
                         results.addAll(getColumnsForTableOrAlias(tableOrAlias, currentWord, scope))
                     }
                 }
+
                 AutocompleteContext.AFTER_ON -> {
                     // Suggest columns for JOIN condition - prioritize FK relationships
                     results.addAll(getJoinColumnSuggestions(currentWord, scope, beforeCursor))
                 }
+
                 else -> {
                     // Default: keywords first, then tables
                     results.addAll(getKeywordSuggestions(currentWord))

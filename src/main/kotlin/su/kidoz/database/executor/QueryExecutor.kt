@@ -178,26 +178,69 @@ class QueryExecutor {
     ): Any? {
         val value =
             when (jdbcType) {
-                Types.NULL -> null
-                Types.BOOLEAN, Types.BIT -> rs.getBoolean(index)
-                Types.TINYINT -> rs.getByte(index)
-                Types.SMALLINT -> rs.getShort(index)
-                Types.INTEGER -> rs.getInt(index)
-                Types.BIGINT -> rs.getLong(index)
-                Types.REAL -> rs.getFloat(index)
-                Types.FLOAT, Types.DOUBLE -> rs.getDouble(index)
-                Types.DECIMAL, Types.NUMERIC -> rs.getBigDecimal(index)
-                Types.DATE -> rs.getDate(index)
-                Types.TIME, Types.TIME_WITH_TIMEZONE -> rs.getTime(index)
-                Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE -> rs.getTimestamp(index)
+                Types.NULL -> {
+                    null
+                }
+
+                Types.BOOLEAN, Types.BIT -> {
+                    rs.getBoolean(index)
+                }
+
+                Types.TINYINT -> {
+                    rs.getByte(index)
+                }
+
+                Types.SMALLINT -> {
+                    rs.getShort(index)
+                }
+
+                Types.INTEGER -> {
+                    rs.getInt(index)
+                }
+
+                Types.BIGINT -> {
+                    rs.getLong(index)
+                }
+
+                Types.REAL -> {
+                    rs.getFloat(index)
+                }
+
+                Types.FLOAT, Types.DOUBLE -> {
+                    rs.getDouble(index)
+                }
+
+                Types.DECIMAL, Types.NUMERIC -> {
+                    rs.getBigDecimal(index)
+                }
+
+                Types.DATE -> {
+                    rs.getDate(index)
+                }
+
+                Types.TIME, Types.TIME_WITH_TIMEZONE -> {
+                    rs.getTime(index)
+                }
+
+                Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE -> {
+                    rs.getTimestamp(index)
+                }
+
                 Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> {
                     rs.getBytes(index)?.let { "[BLOB: ${it.size} bytes]" }
                 }
+
                 Types.CLOB, Types.NCLOB -> {
                     rs.getClob(index)?.let { "[CLOB: ${it.length()} chars]" }
                 }
-                Types.ARRAY -> rs.getArray(index)?.array
-                else -> rs.getString(index)
+
+                Types.ARRAY -> {
+                    rs.getArray(index)?.array
+                }
+
+                else -> {
+                    rs.getString(index)
+                }
             }
 
         return if (rs.wasNull()) null else value

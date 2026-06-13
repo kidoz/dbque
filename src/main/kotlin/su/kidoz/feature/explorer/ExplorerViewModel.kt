@@ -35,37 +35,118 @@ class ExplorerViewModel(
                 updateState { copy(connectionId = event.connectionId) }
                 event.connectionId?.let { loadMetadata() }
             }
-            is ExplorerEvent.Refresh -> loadMetadata()
-            is ExplorerEvent.ToggleNode -> toggleNode(event.nodeId)
-            is ExplorerEvent.SelectNode -> selectNode(event.node)
-            is ExplorerEvent.LoadTableDetails -> loadTableDetails(event.tableName, event.schema)
-            is ExplorerEvent.CopyName -> copyToClipboard(event.name)
-            is ExplorerEvent.GenerateSelect -> generateSelect(event.tableName, event.schema)
-            is ExplorerEvent.GenerateInsert -> generateInsert(event.tableName, event.schema)
-            is ExplorerEvent.GenerateDdl -> generateDdl(event.tableName, event.schema)
+
+            is ExplorerEvent.Refresh -> {
+                loadMetadata()
+            }
+
+            is ExplorerEvent.ToggleNode -> {
+                toggleNode(event.nodeId)
+            }
+
+            is ExplorerEvent.SelectNode -> {
+                selectNode(event.node)
+            }
+
+            is ExplorerEvent.LoadTableDetails -> {
+                loadTableDetails(event.tableName, event.schema)
+            }
+
+            is ExplorerEvent.CopyName -> {
+                copyToClipboard(event.name)
+            }
+
+            is ExplorerEvent.GenerateSelect -> {
+                generateSelect(event.tableName, event.schema)
+            }
+
+            is ExplorerEvent.GenerateInsert -> {
+                generateInsert(event.tableName, event.schema)
+            }
+
+            is ExplorerEvent.GenerateDdl -> {
+                generateDdl(event.tableName, event.schema)
+            }
+
             // Schema navigation
-            is ExplorerEvent.LoadSchemaContents -> loadSchemaContents(event.schemaName)
-            is ExplorerEvent.ExpandSchema -> expandSchema(event.schemaName)
-            is ExplorerEvent.CollapseSchema -> collapseSchema(event.schemaName)
+            is ExplorerEvent.LoadSchemaContents -> {
+                loadSchemaContents(event.schemaName)
+            }
+
+            is ExplorerEvent.ExpandSchema -> {
+                expandSchema(event.schemaName)
+            }
+
+            is ExplorerEvent.CollapseSchema -> {
+                collapseSchema(event.schemaName)
+            }
+
             // MongoDB database navigation
-            is ExplorerEvent.ExpandDatabase -> expandDatabase(event.databaseName)
-            is ExplorerEvent.CollapseDatabase -> collapseDatabase(event.databaseName)
-            is ExplorerEvent.LoadDatabaseCollections -> loadDatabaseCollections(event.databaseName)
+            is ExplorerEvent.ExpandDatabase -> {
+                expandDatabase(event.databaseName)
+            }
+
+            is ExplorerEvent.CollapseDatabase -> {
+                collapseDatabase(event.databaseName)
+            }
+
+            is ExplorerEvent.LoadDatabaseCollections -> {
+                loadDatabaseCollections(event.databaseName)
+            }
+
             // Elasticsearch index navigation
-            is ExplorerEvent.ExpandIndex -> expandIndex(event.indexName)
-            is ExplorerEvent.CollapseIndex -> collapseIndex(event.indexName)
-            is ExplorerEvent.LoadIndexFields -> loadIndexFields(event.indexName)
+            is ExplorerEvent.ExpandIndex -> {
+                expandIndex(event.indexName)
+            }
+
+            is ExplorerEvent.CollapseIndex -> {
+                collapseIndex(event.indexName)
+            }
+
+            is ExplorerEvent.LoadIndexFields -> {
+                loadIndexFields(event.indexName)
+            }
+
             // Elasticsearch index management
-            is ExplorerEvent.ShowCreateIndexDialog -> showCreateIndexDialog()
-            is ExplorerEvent.ShowEditIndexSettingsDialog -> showEditIndexSettingsDialog(event.indexName)
-            is ExplorerEvent.ShowEditIndexMappingsDialog -> showEditIndexMappingsDialog(event.indexName)
-            is ExplorerEvent.HideIndexDialog -> hideIndexDialog()
-            is ExplorerEvent.UpdateIndexName -> updateIndexName(event.name)
-            is ExplorerEvent.UpdateIndexDefinition -> updateIndexDefinition(event.json)
-            is ExplorerEvent.SaveIndex -> saveIndex()
-            is ExplorerEvent.ConfirmDeleteIndex -> confirmDeleteIndex(event.indexName)
-            is ExplorerEvent.DeleteIndex -> deleteIndex(event.indexName)
-            is ExplorerEvent.CancelDelete -> cancelDelete()
+            is ExplorerEvent.ShowCreateIndexDialog -> {
+                showCreateIndexDialog()
+            }
+
+            is ExplorerEvent.ShowEditIndexSettingsDialog -> {
+                showEditIndexSettingsDialog(event.indexName)
+            }
+
+            is ExplorerEvent.ShowEditIndexMappingsDialog -> {
+                showEditIndexMappingsDialog(event.indexName)
+            }
+
+            is ExplorerEvent.HideIndexDialog -> {
+                hideIndexDialog()
+            }
+
+            is ExplorerEvent.UpdateIndexName -> {
+                updateIndexName(event.name)
+            }
+
+            is ExplorerEvent.UpdateIndexDefinition -> {
+                updateIndexDefinition(event.json)
+            }
+
+            is ExplorerEvent.SaveIndex -> {
+                saveIndex()
+            }
+
+            is ExplorerEvent.ConfirmDeleteIndex -> {
+                confirmDeleteIndex(event.indexName)
+            }
+
+            is ExplorerEvent.DeleteIndex -> {
+                deleteIndex(event.indexName)
+            }
+
+            is ExplorerEvent.CancelDelete -> {
+                cancelDelete()
+            }
         }
     }
 
@@ -346,7 +427,10 @@ class ExplorerViewModel(
         updateState { copy(selectedNode = node) }
 
         when (node) {
-            is TreeNode.TableNode -> loadTableDetails(node.table.name, node.table.schema)
+            is TreeNode.TableNode -> {
+                loadTableDetails(node.table.name, node.table.schema)
+            }
+
             else -> {}
         }
     }
@@ -574,8 +658,14 @@ class ExplorerViewModel(
             try {
                 val sql =
                     when (activeConnection.config.type) {
-                        DatabaseType.MONGODB -> generateMongoSelect(tableName)
-                        DatabaseType.ELASTICSEARCH -> generateElasticsearchSelect(tableName)
+                        DatabaseType.MONGODB -> {
+                            generateMongoSelect(tableName)
+                        }
+
+                        DatabaseType.ELASTICSEARCH -> {
+                            generateElasticsearchSelect(tableName)
+                        }
+
                         else -> {
                             activeConnection.getConnection().use { connection ->
                                 activeConnection.driver.generateSelectStatement(connection, tableName, schema)
@@ -616,8 +706,14 @@ class ExplorerViewModel(
             try {
                 val sql =
                     when (activeConnection.config.type) {
-                        DatabaseType.MONGODB -> generateMongoInsert(tableName)
-                        DatabaseType.ELASTICSEARCH -> generateElasticsearchInsert(tableName)
+                        DatabaseType.MONGODB -> {
+                            generateMongoInsert(tableName)
+                        }
+
+                        DatabaseType.ELASTICSEARCH -> {
+                            generateElasticsearchInsert(tableName)
+                        }
+
                         else -> {
                             activeConnection.getConnection().use { connection ->
                                 activeConnection.driver.generateInsertStatement(connection, tableName, schema)
@@ -657,12 +753,16 @@ class ExplorerViewModel(
             try {
                 val sql =
                     when (activeConnection.config.type) {
-                        DatabaseType.MONGODB -> generateMongoDdl(tableName)
+                        DatabaseType.MONGODB -> {
+                            generateMongoDdl(tableName)
+                        }
+
                         DatabaseType.ELASTICSEARCH -> {
                             val esConnection = activeConnection.getElasticsearchConnection()
                             val driver = activeConnection.driver as ElasticsearchDriver
                             driver.getIndexMappingElasticsearch(esConnection, tableName)
                         }
+
                         else -> {
                             activeConnection.getConnection().use { connection ->
                                 activeConnection.driver.generateCreateTableDdl(connection, tableName, schema)
@@ -891,6 +991,7 @@ class ExplorerViewModel(
                         IndexDialogMode.CREATE -> {
                             driver.createIndex(esConnection, dialogState.indexName, dialogState.definitionJson)
                         }
+
                         IndexDialogMode.EDIT_SETTINGS -> {
                             driver.updateIndexSettings(
                                 esConnection,
@@ -898,6 +999,7 @@ class ExplorerViewModel(
                                 dialogState.definitionJson,
                             )
                         }
+
                         IndexDialogMode.EDIT_MAPPINGS -> {
                             driver.updateIndexMappings(
                                 esConnection,

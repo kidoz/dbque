@@ -59,9 +59,11 @@ class QueryPlanViewModel(
                                             val jsonPlan = rows.firstOrNull()?.firstOrNull()?.toString() ?: "[]"
                                             parser.parsePostgresPlan(jsonPlan)
                                         }
+
                                         DatabaseType.MYSQL -> {
                                             parser.parseMySqlPlan(rows)
                                         }
+
                                         else -> {
                                             parser.parseGenericPlan(rawPlan.toString())
                                         }
@@ -99,6 +101,7 @@ class QueryPlanViewModel(
                     "EXPLAIN (COSTS, VERBOSE, FORMAT JSON) $query"
                 }
             }
+
             DatabaseType.MYSQL -> {
                 if (analyze) {
                     "EXPLAIN ANALYZE $query"
@@ -106,14 +109,26 @@ class QueryPlanViewModel(
                     "EXPLAIN $query"
                 }
             }
-            DatabaseType.H2 -> "EXPLAIN $query"
-            DatabaseType.SQLITE -> "EXPLAIN QUERY PLAN $query"
-            DatabaseType.MONGODB -> throw UnsupportedOperationException(
-                "MongoDB query plans require using db.collection.explain() - not supported in SQL editor",
-            )
-            DatabaseType.ELASTICSEARCH -> throw UnsupportedOperationException(
-                "Elasticsearch query plans require using _validate/query API - not supported in SQL editor",
-            )
+
+            DatabaseType.H2 -> {
+                "EXPLAIN $query"
+            }
+
+            DatabaseType.SQLITE -> {
+                "EXPLAIN QUERY PLAN $query"
+            }
+
+            DatabaseType.MONGODB -> {
+                throw UnsupportedOperationException(
+                    "MongoDB query plans require using db.collection.explain() - not supported in SQL editor",
+                )
+            }
+
+            DatabaseType.ELASTICSEARCH -> {
+                throw UnsupportedOperationException(
+                    "Elasticsearch query plans require using _validate/query API - not supported in SQL editor",
+                )
+            }
         }
 
     private fun selectNode(nodeId: String?) {

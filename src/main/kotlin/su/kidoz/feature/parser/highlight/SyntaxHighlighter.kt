@@ -324,57 +324,67 @@ class SqlHighlighter(
                     spans.add(HighlightSpan(i, end, theme.comment, HighlightType.COMMENT))
                     i = end
                 }
+
                 // Multi-line comment
                 text.startsWith("/*", i) -> {
                     val end = (text.indexOf("*/", i + 2).takeIf { it >= 0 }?.plus(2)) ?: text.length
                     spans.add(HighlightSpan(i, end, theme.comment, HighlightType.COMMENT))
                     i = end
                 }
+
                 // String literal (single quotes)
                 text[i] == '\'' -> {
                     val end = findStringEnd(text, i, '\'')
                     spans.add(HighlightSpan(i, end, theme.string, HighlightType.STRING))
                     i = end
                 }
+
                 // Dollar-quoted string (PostgreSQL)
                 text.startsWith("\$\$", i) -> {
                     val end = (text.indexOf("\$\$", i + 2).takeIf { it >= 0 }?.plus(2)) ?: text.length
                     spans.add(HighlightSpan(i, end, theme.string, HighlightType.STRING))
                     i = end
                 }
+
                 // Quoted identifier
                 text[i] == '"' -> {
                     val end = findStringEnd(text, i, '"')
                     spans.add(HighlightSpan(i, end, theme.identifier, HighlightType.IDENTIFIER))
                     i = end
                 }
+
                 // Backtick identifier (MySQL)
                 text[i] == '`' -> {
                     val end = findStringEnd(text, i, '`')
                     spans.add(HighlightSpan(i, end, theme.identifier, HighlightType.IDENTIFIER))
                     i = end
                 }
+
                 // Number
                 text[i].isDigit() || (text[i] == '-' && i + 1 < text.length && text[i + 1].isDigit()) -> {
                     val end = findNumberEnd(text, i)
                     spans.add(HighlightSpan(i, end, theme.number, HighlightType.NUMBER))
                     i = end
                 }
+
                 // Parameter ($1, ?, :name)
                 text[i] == '$' && i + 1 < text.length && text[i + 1].isDigit() -> {
                     val end = findIdentifierEnd(text, i + 1)
                     spans.add(HighlightSpan(i, end, theme.parameter, HighlightType.PARAMETER))
                     i = end
                 }
+
                 text[i] == '?' -> {
                     spans.add(HighlightSpan(i, i + 1, theme.parameter, HighlightType.PARAMETER))
                     i++
                 }
+
                 text[i] == ':' && i + 1 < text.length && (text[i + 1].isLetter() || text[i + 1] == '_') -> {
                     val end = findIdentifierEnd(text, i + 1)
                     spans.add(HighlightSpan(i, end, theme.parameter, HighlightType.PARAMETER))
                     i = end
                 }
+
                 // Identifier/Keyword
                 text[i].isLetter() || text[i] == '_' -> {
                     val end = findIdentifierEnd(text, i)
@@ -391,18 +401,23 @@ class SqlHighlighter(
                     spans.add(HighlightSpan(i, end, style, type))
                     i = end
                 }
+
                 // Operators
                 text[i] in "=<>!+-*/%|&^~" -> {
                     val end = findOperatorEnd(text, i)
                     spans.add(HighlightSpan(i, end, theme.operator, HighlightType.OPERATOR))
                     i = end
                 }
+
                 // Brackets
                 text[i] in "()[]" -> {
                     spans.add(HighlightSpan(i, i + 1, theme.bracket, HighlightType.BRACKET))
                     i++
                 }
-                else -> i++
+
+                else -> {
+                    i++
+                }
             }
         }
 
@@ -842,6 +857,7 @@ class MongoHighlighter : QueryHighlighter {
                     spans.add(HighlightSpan(i, end, theme.comment, HighlightType.COMMENT))
                     i = end
                 }
+
                 // String (double or single quotes)
                 text[i] == '"' || text[i] == '\'' -> {
                     val quote = text[i]
@@ -850,32 +866,41 @@ class MongoHighlighter : QueryHighlighter {
 
                     val (style, type) =
                         when {
-                            content.startsWith("\$") && content in mongoOperators ->
+                            content.startsWith("\$") && content in mongoOperators -> {
                                 theme.mongoOperator to HighlightType.MONGO_OPERATOR
-                            else -> theme.string to HighlightType.STRING
+                            }
+
+                            else -> {
+                                theme.string to HighlightType.STRING
+                            }
                         }
                     spans.add(HighlightSpan(i, end, style, type))
                     i = end
                 }
+
                 // Number
                 text[i].isDigit() || (text[i] == '-' && i + 1 < text.length && text[i + 1].isDigit()) -> {
                     val end = findNumberEnd(text, i)
                     spans.add(HighlightSpan(i, end, theme.number, HighlightType.NUMBER))
                     i = end
                 }
+
                 // Boolean/null
                 text.startsWith("true", i) && !text.getOrNull(i + 4).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 4, theme.keyword, HighlightType.KEYWORD))
                     i += 4
                 }
+
                 text.startsWith("false", i) && !text.getOrNull(i + 5).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 5, theme.keyword, HighlightType.KEYWORD))
                     i += 5
                 }
+
                 text.startsWith("null", i) && !text.getOrNull(i + 4).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 4, theme.keyword, HighlightType.KEYWORD))
                     i += 4
                 }
+
                 // Identifier (db, method names)
                 text[i].isLetter() || text[i] == '_' -> {
                     val end = findIdentifierEnd(text, i)
@@ -890,6 +915,7 @@ class MongoHighlighter : QueryHighlighter {
                     spans.add(HighlightSpan(i, end, style, type))
                     i = end
                 }
+
                 // MongoDB operator in unquoted form
                 text[i] == '$' -> {
                     val end = findIdentifierEnd(text, i + 1)
@@ -903,12 +929,16 @@ class MongoHighlighter : QueryHighlighter {
                     spans.add(HighlightSpan(i, end, style, HighlightType.MONGO_OPERATOR))
                     i = end
                 }
+
                 // Brackets
                 text[i] in "{}[]()." -> {
                     spans.add(HighlightSpan(i, i + 1, theme.bracket, HighlightType.BRACKET))
                     i++
                 }
-                else -> i++
+
+                else -> {
+                    i++
+                }
             }
         }
 
@@ -1084,31 +1114,39 @@ class ElasticsearchHighlighter : QueryHighlighter {
                     spans.add(HighlightSpan(i, end, style, type))
                     i = end
                 }
+
                 // Number
                 text[i].isDigit() || (text[i] == '-' && i + 1 < text.length && text[i + 1].isDigit()) -> {
                     val end = findNumberEnd(text, i)
                     spans.add(HighlightSpan(i, end, theme.number, HighlightType.NUMBER))
                     i = end
                 }
+
                 // Boolean/null
                 text.startsWith("true", i) && !text.getOrNull(i + 4).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 4, theme.keyword, HighlightType.KEYWORD))
                     i += 4
                 }
+
                 text.startsWith("false", i) && !text.getOrNull(i + 5).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 5, theme.keyword, HighlightType.KEYWORD))
                     i += 5
                 }
+
                 text.startsWith("null", i) && !text.getOrNull(i + 4).isLetterOrDigitOrNull() -> {
                     spans.add(HighlightSpan(i, i + 4, theme.keyword, HighlightType.KEYWORD))
                     i += 4
                 }
+
                 // Brackets
                 text[i] in "{}[]" -> {
                     spans.add(HighlightSpan(i, i + 1, theme.bracket, HighlightType.BRACKET))
                     i++
                 }
-                else -> i++
+
+                else -> {
+                    i++
+                }
             }
         }
 

@@ -314,6 +314,7 @@ class MongoQueryExecutor {
                     ),
                 )
             }
+
             MongoOperationType.DROP_INDEX -> {
                 if (op.indexName != null) {
                     collection.dropIndex(op.indexName)
@@ -332,12 +333,16 @@ class MongoQueryExecutor {
                     ),
                 )
             }
+
             MongoOperationType.GET_INDEXES -> {
                 val indexes = collection.listIndexes().toList()
                 executionTime = System.currentTimeMillis() - startTime
                 documentsToResult(indexes, originalQuery, executionTime)
             }
-            else -> QueryExecutionResult.Error("Unknown index operation")
+
+            else -> {
+                QueryExecutionResult.Error("Unknown index operation")
+            }
         }
     }
 
@@ -410,6 +415,7 @@ class MongoQueryExecutor {
                     }
                 Document(filter.field, operatorDoc)
             }
+
             is MongoLogicalFilter -> {
                 val subDocs = filter.filters.map { filterToDocument(it) }
                 when (filter.operator) {
@@ -423,12 +429,17 @@ class MongoQueryExecutor {
 
     private fun stageToDocument(stage: MongoStage): Document =
         when (stage) {
-            is MatchStage -> Document("\$match", filterToDocument(stage.filter))
-            is ProjectStage ->
+            is MatchStage -> {
+                Document("\$match", filterToDocument(stage.filter))
+            }
+
+            is ProjectStage -> {
                 Document(
                     "\$project",
                     Document(stage.projection.fields.mapValues { if (it.value) 1 else 0 }),
                 )
+            }
+
             is GroupStage -> {
                 val groupDoc = Document("_id", mongoValueToAny(stage.id))
                 stage.accumulators.forEach { (field, acc) ->
@@ -436,10 +447,20 @@ class MongoQueryExecutor {
                 }
                 Document("\$group", groupDoc)
             }
-            is SortStage -> Document("\$sort", Document(stage.sort.fields.mapValues { it.value }))
-            is LimitStage -> Document("\$limit", stage.limit)
-            is SkipStage -> Document("\$skip", stage.skip)
-            is LookupStage ->
+
+            is SortStage -> {
+                Document("\$sort", Document(stage.sort.fields.mapValues { it.value }))
+            }
+
+            is LimitStage -> {
+                Document("\$limit", stage.limit)
+            }
+
+            is SkipStage -> {
+                Document("\$skip", stage.skip)
+            }
+
+            is LookupStage -> {
                 Document(
                     "\$lookup",
                     Document()
@@ -448,7 +469,9 @@ class MongoQueryExecutor {
                         .append("foreignField", stage.foreignField)
                         .append("as", stage.alias),
                 )
-            is UnwindStage ->
+            }
+
+            is UnwindStage -> {
                 if (stage.preserveNullAndEmpty) {
                     Document(
                         "\$unwind",
@@ -459,11 +482,27 @@ class MongoQueryExecutor {
                 } else {
                     Document("\$unwind", stage.path)
                 }
-            is AddFieldsStage -> Document("\$addFields", Document(stage.fields.mapValues { mongoValueToAny(it.value) }))
-            is CountStage -> Document("\$count", stage.field)
-            is SampleStage -> Document("\$sample", Document("size", stage.size))
-            is GenericStage -> Document(stage.name, mongoValueToAny(stage.value))
-            else -> Document()
+            }
+
+            is AddFieldsStage -> {
+                Document("\$addFields", Document(stage.fields.mapValues { mongoValueToAny(it.value) }))
+            }
+
+            is CountStage -> {
+                Document("\$count", stage.field)
+            }
+
+            is SampleStage -> {
+                Document("\$sample", Document("size", stage.size))
+            }
+
+            is GenericStage -> {
+                Document(stage.name, mongoValueToAny(stage.value))
+            }
+
+            else -> {
+                Document()
+            }
         }
 
     private fun mongoValueToAny(value: MongoValue): Any? =

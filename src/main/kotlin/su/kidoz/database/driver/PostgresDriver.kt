@@ -555,14 +555,38 @@ class PostgresDriver : AbstractDatabaseDriver() {
         val size = col.size ?: 0
 
         return when {
-            col.dataType.equals("serial", ignoreCase = true) -> "SERIAL"
-            col.dataType.equals("bigserial", ignoreCase = true) -> "BIGSERIAL"
-            col.dataType.equals("int4", ignoreCase = true) -> "INTEGER"
-            col.dataType.equals("int8", ignoreCase = true) -> "BIGINT"
-            col.dataType.equals("float8", ignoreCase = true) -> "DOUBLE PRECISION"
-            col.dataType.equals("bool", ignoreCase = true) -> "BOOLEAN"
-            col.dataType.contains("varchar", ignoreCase = true) -> "VARCHAR($size)"
-            col.dataType.contains("char", ignoreCase = true) -> "CHAR($size)"
+            col.dataType.equals("serial", ignoreCase = true) -> {
+                "SERIAL"
+            }
+
+            col.dataType.equals("bigserial", ignoreCase = true) -> {
+                "BIGSERIAL"
+            }
+
+            col.dataType.equals("int4", ignoreCase = true) -> {
+                "INTEGER"
+            }
+
+            col.dataType.equals("int8", ignoreCase = true) -> {
+                "BIGINT"
+            }
+
+            col.dataType.equals("float8", ignoreCase = true) -> {
+                "DOUBLE PRECISION"
+            }
+
+            col.dataType.equals("bool", ignoreCase = true) -> {
+                "BOOLEAN"
+            }
+
+            col.dataType.contains("varchar", ignoreCase = true) -> {
+                "VARCHAR($size)"
+            }
+
+            col.dataType.contains("char", ignoreCase = true) -> {
+                "CHAR($size)"
+            }
+
             col.dataType.equals("numeric", ignoreCase = true) -> {
                 if (scale > 0) {
                     "NUMERIC($precision, $scale)"
@@ -572,7 +596,10 @@ class PostgresDriver : AbstractDatabaseDriver() {
                     "NUMERIC"
                 }
             }
-            else -> col.dataType
+
+            else -> {
+                col.dataType
+            }
         }
     }
 }

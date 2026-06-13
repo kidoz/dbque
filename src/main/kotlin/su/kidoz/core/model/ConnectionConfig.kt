@@ -37,7 +37,10 @@ data class ConnectionConfig(
 
     fun buildJdbcUrl(): String =
         when (type) {
-            DatabaseType.SQLITE -> type.buildUrl(path = path)
+            DatabaseType.SQLITE -> {
+                type.buildUrl(path = path)
+            }
+
             DatabaseType.H2 -> {
                 val mode =
                     if (path.startsWith("tcp://") || path.startsWith("ssl://")) {
@@ -47,12 +50,14 @@ data class ConnectionConfig(
                     }
                 type.buildUrl(path = path, mode = mode)
             }
-            else ->
+
+            else -> {
                 type.buildUrl(
                     host = host,
                     port = effectivePort,
                     database = database,
                 )
+            }
         }
 
     fun toDisplayString(): String =
