@@ -2,6 +2,7 @@ package su.kidoz.database.executor
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import su.kidoz.core.model.QueryExecution
 import su.kidoz.core.model.QueryExecutionResult
@@ -11,6 +12,7 @@ import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.SQLException
 import java.sql.Types
+import java.util.concurrent.CancellationException
 
 class QueryExecutor {
     private val logger = KotlinLogging.logger {}
@@ -22,99 +24,118 @@ class QueryExecutor {
         withContext(Dispatchers.IO) {
             try {
                 connection.createStatement().use { statement ->
-                    statement.apply {
-                        if (execution.maxRows > 0) maxRows = execution.maxRows
-                        if (execution.timeout > 0) queryTimeout = execution.timeout
-                        if (execution.fetchSize > 0) fetchSize = execution.fetchSize
-                    }
-
-                    val queries = splitQueries(execution.query)
-                    val results = mutableListOf<QueryResult>()
-
-                    for (query in queries) {
-                        val trimmedQuery = query.trim()
-                        if (trimmedQuery.isEmpty()) continue
-
-                        logger.debug { "Executing query: $trimmedQuery" }
-
-                        val queryStartTime = System.currentTimeMillis()
-                        val hasResultSet = statement.execute(trimmedQuery)
-                        val execTime = System.currentTimeMillis() - queryStartTime
-
-                        if (hasResultSet) {
-                            statement.resultSet?.use { rs ->
-                                results.add(mapResultSet(rs, trimmedQuery, execTime))
+                    val cancelHandler =
+                        coroutineContext.job.invokeOnCompletion { cause ->
+                            if (cause is kotlinx.coroutines.CancellationException || cause is CancellationException) {
+                                try {
+                                    statement.cancel()
+                                    logger.debug { "Statement cancelled successfully" }
+                                } catch (e: Exception) {
+                                    logger.warn(e) { "Failed to cancel statement" }
+                                }
                             }
-                        } else {
-                            val affectedRows = statement.updateCount
-                            results.add(
-                                QueryResult(
-                                    columns = emptyList(),
-                                    rows = emptyList(),
-                                    rowCount = 0,
-                                    affectedRows = affectedRows,
-                                    executionTimeMs = execTime,
-                                    query = trimmedQuery,
-                                    isResultSet = false,
-                                ),
-                            )
                         }
 
-                        // Handle multiple results from a single execute call.
-                        while (true) {
-                            val hasMoreResults = statement.moreResults
-                            val updateCount = statement.updateCount
+                    try {
+                        statement.apply {
+                            if (execution.maxRows > 0) maxRows = execution.maxRows
+                            if (execution.timeout > 0) queryTimeout = execution.timeout
+                            if (execution.fetchSize > 0) fetchSize = execution.fetchSize
+                        }
 
-                            if (!hasMoreResults && updateCount == -1) {
-                                break
-                            }
+                        val queries =
+                            su.kidoz.feature.editor.QuerySplitter
+                                .getAllQueries(execution.query)
+                                .map { it.query }
+                        val results = mutableListOf<QueryResult>()
 
-                            if (hasMoreResults) {
+                        for (query in queries) {
+                            val trimmedQuery = query.trim()
+                            if (trimmedQuery.isEmpty()) continue
+
+                            logger.debug { "Executing query: $trimmedQuery" }
+
+                            val queryStartTime = System.currentTimeMillis()
+                            val hasResultSet = statement.execute(trimmedQuery)
+                            val execTime = System.currentTimeMillis() - queryStartTime
+
+                            if (hasResultSet) {
                                 statement.resultSet?.use { rs ->
-                                    results.add(
-                                        mapResultSet(
-                                            rs,
-                                            trimmedQuery,
-                                            System.currentTimeMillis() - queryStartTime,
-                                        ),
-                                    )
+                                    results.add(mapResultSet(rs, trimmedQuery, execTime))
                                 }
                             } else {
+                                val affectedRows = statement.updateCount
                                 results.add(
                                     QueryResult(
                                         columns = emptyList(),
                                         rows = emptyList(),
                                         rowCount = 0,
-                                        affectedRows = updateCount,
-                                        executionTimeMs = System.currentTimeMillis() - queryStartTime,
+                                        affectedRows = affectedRows,
+                                        executionTimeMs = execTime,
                                         query = trimmedQuery,
                                         isResultSet = false,
                                     ),
                                 )
                             }
-                        }
-                    }
 
-                    // Collect warnings
-                    val warnings = mutableListOf<String>()
-                    var warning = statement.warnings
-                    while (warning != null) {
-                        warnings.add(warning.message ?: "Unknown warning")
-                        warning = warning.nextWarning
-                    }
+                            // Handle multiple results from a single execute call.
+                            while (true) {
+                                val hasMoreResults = statement.moreResults
+                                val updateCount = statement.updateCount
 
-                    if (results.size == 1) {
-                        QueryExecutionResult.Success(results.first().copy(warnings = warnings))
-                    } else {
-                        QueryExecutionResult.MultiResult(
-                            results.mapIndexed { index, result ->
-                                if (index == results.lastIndex) {
-                                    result.copy(warnings = warnings)
-                                } else {
-                                    result
+                                if (!hasMoreResults && updateCount == -1) {
+                                    break
                                 }
-                            },
-                        )
+
+                                if (hasMoreResults) {
+                                    statement.resultSet?.use { rs ->
+                                        results.add(
+                                            mapResultSet(
+                                                rs,
+                                                trimmedQuery,
+                                                System.currentTimeMillis() - queryStartTime,
+                                            ),
+                                        )
+                                    }
+                                } else {
+                                    results.add(
+                                        QueryResult(
+                                            columns = emptyList(),
+                                            rows = emptyList(),
+                                            rowCount = 0,
+                                            affectedRows = updateCount,
+                                            executionTimeMs = System.currentTimeMillis() - queryStartTime,
+                                            query = trimmedQuery,
+                                            isResultSet = false,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+
+                        // Collect warnings
+                        val warnings = mutableListOf<String>()
+                        var warning = statement.warnings
+                        while (warning != null) {
+                            warnings.add(warning.message ?: "Unknown warning")
+                            warning = warning.nextWarning
+                        }
+
+                        if (results.size == 1) {
+                            QueryExecutionResult.Success(results.first().copy(warnings = warnings))
+                        } else {
+                            QueryExecutionResult.MultiResult(
+                                results.mapIndexed { index, result ->
+                                    if (index == results.lastIndex) {
+                                        result.copy(warnings = warnings)
+                                    } else {
+                                        result
+                                    }
+                                },
+                            )
+                        }
+                    } finally {
+                        cancelHandler.dispose()
                     }
                 }
             } catch (e: SQLException) {
@@ -244,156 +265,5 @@ class QueryExecutor {
             }
 
         return if (rs.wasNull()) null else value
-    }
-
-    private fun splitQueries(sql: String): List<String> {
-        val queries = mutableListOf<String>()
-        var current = StringBuilder()
-        var i = 0
-        val len = sql.length
-
-        while (i < len) {
-            val c = sql[i]
-
-            when {
-                // Single-line comment: -- until end of line
-                c == '-' && i + 1 < len && sql[i + 1] == '-' -> {
-                    current.append(c)
-                    i++
-                    current.append(sql[i])
-                    i++
-                    // Read until end of line
-                    while (i < len && sql[i] != '\n') {
-                        current.append(sql[i])
-                        i++
-                    }
-                    if (i < len) {
-                        current.append(sql[i])
-                        i++
-                    }
-                }
-
-                // Multi-line comment: /* ... */
-                c == '/' && i + 1 < len && sql[i + 1] == '*' -> {
-                    current.append(c)
-                    i++
-                    current.append(sql[i])
-                    i++
-                    // Read until closing */
-                    while (i < len) {
-                        if (sql[i] == '*' && i + 1 < len && sql[i + 1] == '/') {
-                            current.append(sql[i])
-                            i++
-                            current.append(sql[i])
-                            i++
-                            break
-                        }
-                        current.append(sql[i])
-                        i++
-                    }
-                }
-
-                // Dollar-quoted string (PostgreSQL): $tag$...$tag$ or $$...$$
-                c == '$' -> {
-                    val dollarQuote = extractDollarQuoteTag(sql, i)
-                    if (dollarQuote != null) {
-                        current.append(dollarQuote)
-                        i += dollarQuote.length
-                        // Find the closing dollar quote
-                        val closingIndex = sql.indexOf(dollarQuote, i)
-                        if (closingIndex >= 0) {
-                            current.append(sql.substring(i, closingIndex + dollarQuote.length))
-                            i = closingIndex + dollarQuote.length
-                        } else {
-                            // No closing tag found, append rest of string
-                            current.append(sql.substring(i))
-                            i = len
-                        }
-                    } else {
-                        current.append(c)
-                        i++
-                    }
-                }
-
-                // Single or double quoted string
-                c == '\'' || c == '"' -> {
-                    val stringChar = c
-                    current.append(c)
-                    i++
-                    while (i < len) {
-                        val sc = sql[i]
-                        current.append(sc)
-                        i++
-                        if (sc == stringChar) {
-                            // Check for escaped quote (doubled)
-                            if (i < len && sql[i] == stringChar) {
-                                current.append(sql[i])
-                                i++
-                            } else {
-                                break
-                            }
-                        }
-                    }
-                }
-
-                // Semicolon - query separator
-                c == ';' -> {
-                    val query = current.toString().trim()
-                    if (query.isNotEmpty()) {
-                        queries.add(query)
-                    }
-                    current = StringBuilder()
-                    i++
-                }
-
-                else -> {
-                    current.append(c)
-                    i++
-                }
-            }
-        }
-
-        val lastQuery = current.toString().trim()
-        if (lastQuery.isNotEmpty()) {
-            queries.add(lastQuery)
-        }
-
-        return queries
-    }
-
-    /**
-     * Extracts a dollar quote tag from the SQL string starting at the given position.
-     * Returns the tag (e.g., "$$" or "$tag$") if found, or null if not a valid dollar quote.
-     */
-    private fun extractDollarQuoteTag(
-        sql: String,
-        startIndex: Int,
-    ): String? {
-        if (startIndex >= sql.length || sql[startIndex] != '$') return null
-
-        var i = startIndex + 1
-        // Empty tag: $$
-        if (i < sql.length && sql[i] == '$') {
-            return "$$"
-        }
-
-        // Named tag: $identifier$
-        // Tag must start with letter or underscore, followed by letters, digits, or underscores
-        if (i >= sql.length) return null
-        val firstChar = sql[i]
-        if (!firstChar.isLetter() && firstChar != '_') return null
-
-        i++
-        while (i < sql.length) {
-            val c = sql[i]
-            if (c == '$') {
-                return sql.substring(startIndex, i + 1)
-            }
-            if (!c.isLetterOrDigit() && c != '_') {
-                return null
-            }
-            i++
-        }
-        return null
     }
 }
