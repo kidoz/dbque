@@ -16,7 +16,7 @@ a single, intuitive workspace for PostgreSQL, MySQL, SQLite, H2, MongoDB, and El
 ---
 
 <div align="center">
-  <img src="img_2.png" alt="DBQue main window" width="900" />
+  <img src="docs/screenshots/main.png" alt="DBQue main window" width="900" />
 </div>
 
 ---
