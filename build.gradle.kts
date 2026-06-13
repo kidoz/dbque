@@ -114,7 +114,8 @@ compose.desktop {
             packageName = "DBQue"
             packageVersion = "1.0.0"
             description = "Database Management Tool"
-            vendor = "DBQue"
+            vendor = "Aleksandr Pavlov"
+            licenseFile.set(project.file("LICENSE"))
 
             macOS {
                 iconFile.set(project.file("src/main/resources/icons/app.icns"))
