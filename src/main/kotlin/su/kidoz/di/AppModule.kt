@@ -51,7 +51,7 @@ val appModule =
         // ViewModels
         single { ConnectionViewModel(get(), get()) }
         single { ExplorerViewModel(get()) }
-        single { EditorViewModel(get(), get(), get()) }
+        single { EditorViewModel(get(), get(), get(), get()) }
         single { ResultsViewModel(get()) }
         single { HistoryViewModel(get(), get()) }
         single { QueryPlanViewModel(get()) }

@@ -59,6 +59,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import org.koin.compose.koinInject
+import su.kidoz.database.ConnectionManager
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorTab
 import su.kidoz.feature.editor.QuerySplitter
@@ -80,19 +83,39 @@ fun SqlEditor(
     onEvent: (EditorEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val connectionManager: ConnectionManager = koinInject()
+    val activeConnection = connectionManager.activeConnection
+
     val parserService = remember { QueryParserService() }
 
     var textFieldValue by remember(tab.id) {
         mutableStateOf(TextFieldValue(text = tab.content))
     }
 
+    var autocompleteSelectedIndex by remember(tab.isAutocompleteVisible, tab.autocompleteSuggestions.size) {
+        mutableStateOf(0)
+    }
+
     // Sync external changes
-    LaunchedEffect(tab.content) {
+    LaunchedEffect(tab.content, tab.selectionStart, tab.selectionEnd, tab.cursorPosition) {
         if (textFieldValue.text != tab.content) {
             textFieldValue =
                 textFieldValue.copy(
                     text = tab.content,
-                    selection = TextRange(tab.content.length.coerceAtMost(textFieldValue.selection.start)),
+                    selection =
+                        TextRange(
+                            start = tab.selectionStart.coerceIn(0, tab.content.length),
+                            end = tab.selectionEnd.coerceIn(0, tab.content.length),
+                        ),
+                )
+        } else if (textFieldValue.selection.start != tab.selectionStart || textFieldValue.selection.end != tab.selectionEnd) {
+            textFieldValue =
+                textFieldValue.copy(
+                    selection =
+                        TextRange(
+                            start = tab.selectionStart.coerceIn(0, tab.content.length),
+                            end = tab.selectionEnd.coerceIn(0, tab.content.length),
+                        ),
                 )
         }
     }
@@ -111,12 +134,13 @@ fun SqlEditor(
     val horizontalScroll = rememberScrollState()
 
     val extendedColors = DBQueTheme.extendedColors
+    val dbType = activeConnection?.config?.type
 
     // Create syntax highlighting transformation - uses auto-detection
     val syntaxTheme = if (extendedColors.isDarkTheme) SyntaxTheme.Dark else SyntaxTheme.Light
     val syntaxHighlightTransformation =
-        remember(syntaxTheme) {
-            QuerySyntaxHighlightTransformation(parserService, syntaxTheme)
+        remember(syntaxTheme, dbType) {
+            QuerySyntaxHighlightTransformation(parserService, syntaxTheme, dbType)
         }
 
     Column(modifier = modifier) {
@@ -228,6 +252,36 @@ fun SqlEditor(
                                 .focusRequester(focusRequester)
                                 .onPreviewKeyEvent { keyEvent ->
                                     if (keyEvent.type == KeyEventType.KeyDown) {
+                                        // Intercept for autocomplete navigation
+                                        if (tab.isAutocompleteVisible && tab.autocompleteSuggestions.isNotEmpty()) {
+                                            when (keyEvent.key) {
+                                                Key.DirectionDown -> {
+                                                    autocompleteSelectedIndex =
+                                                        (autocompleteSelectedIndex + 1).coerceAtMost(tab.autocompleteSuggestions.size - 1)
+                                                    return@onPreviewKeyEvent true
+                                                }
+
+                                                Key.DirectionUp -> {
+                                                    autocompleteSelectedIndex = (autocompleteSelectedIndex - 1).coerceAtLeast(0)
+                                                    return@onPreviewKeyEvent true
+                                                }
+
+                                                Key.Enter, Key.Tab -> {
+                                                    onEvent(
+                                                        EditorEvent.ApplyAutocomplete(
+                                                            tab.autocompleteSuggestions[autocompleteSelectedIndex],
+                                                        ),
+                                                    )
+                                                    return@onPreviewKeyEvent true
+                                                }
+
+                                                Key.Escape -> {
+                                                    onEvent(EditorEvent.DismissAutocomplete)
+                                                    return@onPreviewKeyEvent true
+                                                }
+                                            }
+                                        }
+
                                         when {
                                             // Alt+Enter: Show quick-fixes for issue at cursor
                                             keyEvent.isAltPressed &&
@@ -307,6 +361,50 @@ fun SqlEditor(
                             }
                         },
                     )
+
+                    // Show QuickFixPopup if available
+                    if (tab.quickFixes != null && tab.quickFixIssue != null) {
+                        Popup(
+                            onDismissRequest = { onEvent(EditorEvent.DismissQuickFixes) },
+                            alignment = Alignment.TopStart,
+                        ) {
+                            QuickFixPopup(
+                                issue = tab.quickFixIssue,
+                                fixes = tab.quickFixes,
+                                onApplyFix = { fix ->
+                                    onEvent(EditorEvent.ApplyQuickFix(fix))
+                                },
+                                onDismiss = { onEvent(EditorEvent.DismissQuickFixes) },
+                                modifier =
+                                    Modifier
+                                        // Approximate cursor offset, ideally calculate from cursor position
+                                        .padding(start = 50.dp, top = 20.dp)
+                                        .width(400.dp),
+                            )
+                        }
+                    }
+
+                    // Show AutocompletePopup if available
+                    if (tab.isAutocompleteVisible && tab.autocompleteSuggestions.isNotEmpty()) {
+                        Popup(
+                            onDismissRequest = { onEvent(EditorEvent.DismissAutocomplete) },
+                            alignment = Alignment.TopStart,
+                        ) {
+                            su.kidoz.feature.editor.ui.AutocompletePopup(
+                                items = tab.autocompleteSuggestions,
+                                selectedIndex = autocompleteSelectedIndex,
+                                onItemSelected = { item ->
+                                    onEvent(EditorEvent.ApplyAutocomplete(item))
+                                },
+                                onDismiss = { onEvent(EditorEvent.DismissAutocomplete) },
+                                modifier =
+                                    Modifier
+                                        // Approximate cursor offset, ideally calculate from cursor position
+                                        .padding(start = 50.dp, top = 20.dp)
+                                        .width(300.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -340,9 +438,37 @@ private fun findIssueAtPosition(
 class QuerySyntaxHighlightTransformation(
     private val parserService: QueryParserService,
     private val theme: SyntaxTheme,
+    private val databaseType: su.kidoz.core.model.DatabaseType? = null,
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        val highlighted = parserService.highlight(text.text, theme)
+        val parserType =
+            when (databaseType) {
+                su.kidoz.core.model.DatabaseType.MONGODB -> DatabaseType.MONGODB
+
+                su.kidoz.core.model.DatabaseType.ELASTICSEARCH -> DatabaseType.ELASTICSEARCH
+
+                su.kidoz.core.model.DatabaseType.POSTGRESQL,
+                su.kidoz.core.model.DatabaseType.MYSQL,
+                su.kidoz.core.model.DatabaseType.SQLITE,
+                su.kidoz.core.model.DatabaseType.H2,
+                -> DatabaseType.SQL
+
+                null -> null
+            }
+
+        val dialect =
+            when (databaseType) {
+                su.kidoz.core.model.DatabaseType.MYSQL -> su.kidoz.feature.parser.sql.SqlDialect.MYSQL
+                su.kidoz.core.model.DatabaseType.SQLITE -> su.kidoz.feature.parser.sql.SqlDialect.SQLITE
+                else -> su.kidoz.feature.parser.sql.SqlDialect.POSTGRESQL
+            }
+
+        val highlighted =
+            if (parserType != null) {
+                parserService.highlightAs(text.text, parserType, dialect, theme)
+            } else {
+                parserService.highlight(text.text, theme)
+            }
         return TransformedText(highlighted, OffsetMapping.Identity)
     }
 }

@@ -27,6 +27,10 @@ data class EditorTab(
     val validationIssues: List<ValidationIssue> = emptyList(),
     val isValidating: Boolean = false,
     val selectedIssue: ValidationIssue? = null,
+    val quickFixes: List<su.kidoz.feature.editor.quickfix.QuickFix>? = null,
+    val quickFixIssue: ValidationIssue? = null,
+    val autocompleteSuggestions: List<su.kidoz.feature.editor.autocomplete.AutocompleteItem> = emptyList(),
+    val isAutocompleteVisible: Boolean = false,
 ) {
     val selectedText: String
         get() =

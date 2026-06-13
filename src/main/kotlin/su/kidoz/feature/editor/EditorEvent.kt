@@ -94,4 +94,19 @@ sealed interface EditorEvent : UiEvent {
     data class ApplyQuickFix(
         val quickFix: QuickFix,
     ) : EditorEvent
+
+    /** Dismiss the quick-fix popup */
+    data object DismissQuickFixes : EditorEvent
+
+    // Autocomplete
+    data class RequestAutocomplete(
+        val text: String,
+        val cursorPosition: Int,
+    ) : EditorEvent
+
+    data object DismissAutocomplete : EditorEvent
+
+    data class ApplyAutocomplete(
+        val item: su.kidoz.feature.editor.autocomplete.AutocompleteItem,
+    ) : EditorEvent
 }

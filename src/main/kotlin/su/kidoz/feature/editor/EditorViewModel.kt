@@ -13,6 +13,8 @@ import su.kidoz.core.repository.QueryHistoryRepository
 import su.kidoz.database.ConnectionManager
 import su.kidoz.database.executor.MongoQueryExecutor
 import su.kidoz.database.executor.QueryExecutor
+import su.kidoz.feature.editor.autocomplete.AutocompleteItem
+import su.kidoz.feature.editor.autocomplete.AutocompleteProvider
 import su.kidoz.feature.editor.quickfix.QuickFix
 import su.kidoz.feature.editor.quickfix.QuickFixProvider
 import su.kidoz.feature.editor.quickfix.apply
@@ -23,6 +25,7 @@ class EditorViewModel(
     private val connectionManager: ConnectionManager,
     private val queryExecutor: QueryExecutor,
     private val queryHistoryRepository: QueryHistoryRepository,
+    private val autocompleteProvider: AutocompleteProvider,
 ) : MviViewModel<EditorState, EditorEvent, EditorEffect>(EditorState()) {
     private var executionJob: Job? = null
     private var tabCounter = 1
@@ -63,6 +66,10 @@ class EditorViewModel(
             is EditorEvent.SelectIssue -> selectIssue(event.issue)
             is EditorEvent.ShowQuickFixes -> showQuickFixes(event.issue)
             is EditorEvent.ApplyQuickFix -> applyQuickFix(event.quickFix)
+            is EditorEvent.DismissQuickFixes -> dismissQuickFixes()
+            is EditorEvent.RequestAutocomplete -> requestAutocomplete(event.text, event.cursorPosition)
+            is EditorEvent.DismissAutocomplete -> dismissAutocomplete()
+            is EditorEvent.ApplyAutocomplete -> applyAutocomplete(event.item)
         }
     }
 
@@ -211,14 +218,46 @@ class EditorViewModel(
             quickFixProvider.getQuickFixes(
                 issue = issue,
                 content = activeTab.content,
-                availableColumns = emptyList(), // TODO: Get from autocomplete cache
-                availableTables = emptyList(), // TODO: Get from autocomplete cache
+                availableColumns =
+                    autocompleteProvider
+                        .getCachedColumns()
+                        .values
+                        .flatten()
+                        .map { it.name }
+                        .distinct(),
+                availableTables = autocompleteProvider.getCachedTables().map { it.name },
             )
 
         if (fixes.isEmpty()) {
             sendEffect(EditorEffect.ShowMessage("No quick-fixes available for this issue"))
         } else {
-            sendEffect(EditorEffect.QuickFixesAvailable(issue, fixes))
+            updateState {
+                copy(
+                    tabs =
+                        tabs.map { tab ->
+                            if (tab.id == activeTabId) {
+                                tab.copy(quickFixes = fixes, quickFixIssue = issue)
+                            } else {
+                                tab
+                            }
+                        },
+                )
+            }
+        }
+    }
+
+    private fun dismissQuickFixes() {
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTabId) {
+                            tab.copy(quickFixes = null, quickFixIssue = null)
+                        } else {
+                            tab
+                        }
+                    },
+            )
         }
     }
 
@@ -243,6 +282,8 @@ class EditorViewModel(
                                 redoStack = emptyList(),
                                 selectedIssue = null,
                                 isValidating = true,
+                                quickFixes = null,
+                                quickFixIssue = null,
                             )
                         } else {
                             tab
@@ -257,6 +298,115 @@ class EditorViewModel(
         }
 
         sendEffect(EditorEffect.ShowMessage("Applied: ${quickFix.title}"))
+    }
+
+    private fun triggerValidation(
+        tabId: String,
+        content: String,
+    ) {
+        viewModelScope.launch {
+            val activeConnection = connectionManager.activeConnection
+            val dbType = activeConnection?.config?.type
+            val version = null
+            // Ideally fetch available tables, but for now we'll pass emptySet
+            liveValidator.submitForValidation(
+                tabId = tabId,
+                content = content,
+                databaseType = dbType,
+                version = version,
+                tables = emptySet(),
+            )
+        }
+    }
+
+    private fun requestAutocomplete(
+        text: String,
+        cursorPosition: Int,
+    ) {
+        val activeTab = currentState.activeTab ?: return
+        viewModelScope.launch {
+            try {
+                // Ensure cache is refreshed
+                autocompleteProvider.refreshCache()
+                val suggestions = autocompleteProvider.getSuggestions(text, cursorPosition)
+                updateState {
+                    copy(
+                        tabs =
+                            tabs.map { tab ->
+                                if (tab.id == activeTab.id) {
+                                    tab.copy(
+                                        autocompleteSuggestions = suggestions,
+                                        isAutocompleteVisible = suggestions.isNotEmpty(),
+                                    )
+                                } else {
+                                    tab
+                                }
+                            },
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore error, just don't show suggestions
+            }
+        }
+    }
+
+    private fun dismissAutocomplete() {
+        val activeTab = currentState.activeTab ?: return
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTab.id) {
+                            tab.copy(isAutocompleteVisible = false)
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+    }
+
+    private fun applyAutocomplete(item: AutocompleteItem) {
+        val activeTab = currentState.activeTab ?: return
+
+        // Find the start of the word being typed
+        val beforeCursor = activeTab.content.substring(0, activeTab.cursorPosition)
+        val wordStart = beforeCursor.indexOfLast { it.isWhitespace() || it in "(),;." } + 1
+
+        val newContent =
+            buildString {
+                append(activeTab.content.substring(0, wordStart))
+                append(item.insertText)
+                append(activeTab.content.substring(activeTab.cursorPosition))
+            }
+        val newPosition = wordStart + item.insertText.length
+
+        // Save current state to undo stack
+        val snapshot = EditorSnapshot(activeTab.content, activeTab.cursorPosition)
+        val newUndoStack = (activeTab.undoStack + snapshot).takeLast(EditorTab.MAX_UNDO_STACK_SIZE)
+
+        updateState {
+            copy(
+                tabs =
+                    tabs.map { tab ->
+                        if (tab.id == activeTab.id) {
+                            tab.copy(
+                                content = newContent,
+                                cursorPosition = newPosition,
+                                isModified = true,
+                                undoStack = newUndoStack,
+                                redoStack = emptyList(),
+                                isAutocompleteVisible = false,
+                                isValidating = true,
+                            )
+                        } else {
+                            tab
+                        }
+                    },
+            )
+        }
+
+        triggerValidation(activeTab.id, newContent)
     }
 
     private fun undo() {
@@ -446,7 +596,7 @@ class EditorViewModel(
                         for ((index, query) in queries.withIndex()) {
                             if (!currentState.isExecuting) break // Check if cancelled
 
-                            val execution = QueryExecution(query = query)
+                            val execution = QueryExecution(query = query, maxRows = 1000, timeout = 60)
                             when (val result = queryExecutor.execute(connection, execution)) {
                                 is QueryExecutionResult.Success -> {
                                     allResults.add(result.result)
@@ -538,7 +688,7 @@ class EditorViewModel(
         query: String,
     ) {
         activeConnection.getConnection().use { connection ->
-            val execution = QueryExecution(query = query)
+            val execution = QueryExecution(query = query, maxRows = 1000, timeout = 60)
             val startTime = System.currentTimeMillis()
 
             when (val result = queryExecutor.execute(connection, execution)) {
@@ -640,15 +790,31 @@ class EditorViewModel(
     }
 
     private fun formatSql() {
-        // Basic SQL formatting - could be enhanced with a proper SQL parser
+        // Basic SQL formatting
         val activeTab = currentState.activeTab ?: return
         val formatted = formatSqlSimple(activeTab.content)
+
+        if (formatted == activeTab.content) return
+
+        val snapshot = EditorSnapshot(activeTab.content, activeTab.cursorPosition)
+        val newUndoStack = (activeTab.undoStack + snapshot).takeLast(EditorTab.MAX_UNDO_STACK_SIZE)
+
+        // Keep cursor in bounds
+        val newCursor = activeTab.cursorPosition.coerceAtMost(formatted.length)
+
         updateState {
             copy(
                 tabs =
                     tabs.map { tab ->
                         if (tab.id == activeTabId) {
-                            tab.copy(content = formatted, isModified = true, isValidating = true)
+                            tab.copy(
+                                content = formatted,
+                                cursorPosition = newCursor,
+                                isModified = true,
+                                undoStack = newUndoStack,
+                                redoStack = emptyList(),
+                                isValidating = true,
+                            )
                         } else {
                             tab
                         }
@@ -657,49 +823,27 @@ class EditorViewModel(
         }
 
         // Re-validate after format
-        viewModelScope.launch {
-            liveValidator.submitForValidation(activeTab.id, formatted)
-        }
+        triggerValidation(activeTab.id, formatted)
     }
 
     private fun formatSqlSimple(sql: String): String {
-        val keywords =
-            listOf(
-                "SELECT",
-                "FROM",
-                "WHERE",
-                "AND",
-                "OR",
-                "ORDER BY",
-                "GROUP BY",
-                "HAVING",
-                "JOIN",
-                "LEFT JOIN",
-                "RIGHT JOIN",
-                "INNER JOIN",
-                "OUTER JOIN",
-                "ON",
-                "INSERT INTO",
-                "VALUES",
-                "UPDATE",
-                "SET",
-                "DELETE FROM",
-                "CREATE TABLE",
-                "ALTER TABLE",
-                "DROP TABLE",
-                "LIMIT",
-                "OFFSET",
+        val pattern =
+            Regex(
+                """(--[^\n]*\n?|/\*.*?\*/|'(?:[^']|'')*'|"(?:[^"]|"")*"|(?i)\b(SELECT|FROM|WHERE|AND|OR|ORDER\s+BY|GROUP\s+BY|HAVING|JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|OUTER\s+JOIN|ON|INSERT\s+INTO|VALUES|UPDATE|SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|LIMIT|OFFSET)\b)""",
+                RegexOption.DOT_MATCHES_ALL,
             )
 
-        var result = sql.trim()
-        keywords.forEach { keyword ->
-            result =
-                result.replace(
-                    Regex("(?i)\\b$keyword\\b"),
-                    "\n$keyword",
-                )
-        }
-        return result.trim().replace(Regex("\n+"), "\n")
+        val formatted =
+            pattern.replace(sql) { matchResult ->
+                val value = matchResult.value
+                val firstChar = value.firstOrNull()
+                if (firstChar == '\'' || firstChar == '"' || firstChar == '-' || firstChar == '/') {
+                    value // Preserve strings and comments
+                } else {
+                    "\n${value.uppercase().replace(Regex("\\s+"), " ")}" // Format keywords
+                }
+            }
+        return formatted.trim().replace(Regex("\n[ \t]*\n+"), "\n")
     }
 
     private fun findReplace(
@@ -728,8 +872,6 @@ class EditorViewModel(
         }
 
         // Re-validate after find/replace
-        viewModelScope.launch {
-            liveValidator.submitForValidation(activeTab.id, newContent)
-        }
+        triggerValidation(activeTab.id, newContent)
     }
 }

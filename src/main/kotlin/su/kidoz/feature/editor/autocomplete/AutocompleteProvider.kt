@@ -39,6 +39,10 @@ class AutocompleteProvider(
     private val scopeAnalyzer = QueryScopeAnalyzer()
     private val functionSignatureProvider = FunctionSignatureProvider()
 
+    fun getCachedTables(): List<TableInfo> = cachedTables
+
+    fun getCachedColumns(): Map<String, List<ColumnInfo>> = cachedColumns
+
     private val sqlKeywords =
         listOf(
             "SELECT",
