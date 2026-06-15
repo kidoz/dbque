@@ -1,5 +1,6 @@
 package su.kidoz.feature.settings
 
+import su.kidoz.feature.editor.format.KeywordCasing
 import su.kidoz.mvi.UiState
 
 data class SettingsState(
@@ -13,6 +14,13 @@ data class SettingsState(
     val lineNumbers: Boolean = true,
     val highlightCurrentLine: Boolean = true,
     val autoComplete: Boolean = true,
+    // Formatting presets
+    val formatKeywordCasing: KeywordCasing = KeywordCasing.UPPERCASE,
+    val formatIdentifierCasing: KeywordCasing = KeywordCasing.UNCHANGED,
+    val formatIndentSize: Int = 4,
+    val formatUseTabs: Boolean = false,
+    val formatExpandCommaLists: Boolean = true,
+    val formatSpaceAroundOperators: Boolean = true,
     // Results settings
     val maxResultRows: Int = 1000,
     val nullDisplayText: String = "NULL",
@@ -26,6 +34,7 @@ data class SettingsState(
 
 enum class SettingsTab {
     EDITOR,
+    FORMATTING,
     RESULTS,
     CONNECTION,
     APPEARANCE,

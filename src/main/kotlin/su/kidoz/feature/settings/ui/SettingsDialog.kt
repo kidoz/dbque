@@ -3,6 +3,7 @@ package su.kidoz.feature.settings.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -70,6 +71,7 @@ fun SettingsDialog(
                     ) {
                         when (state.activeTab) {
                             SettingsTab.EDITOR -> EditorSettings(state, onEvent)
+                            SettingsTab.FORMATTING -> FormattingSettings(state, onEvent)
                             SettingsTab.RESULTS -> ResultsSettings(state, onEvent)
                             SettingsTab.CONNECTION -> ConnectionSettings(state, onEvent)
                             SettingsTab.APPEARANCE -> AppearanceSettings(state, onEvent)
@@ -108,6 +110,7 @@ private fun SettingsTabItem(
     val icon: ImageVector =
         when (tab) {
             SettingsTab.EDITOR -> Icons.Default.Code
+            SettingsTab.FORMATTING -> Icons.AutoMirrored.Filled.FormatAlignLeft
             SettingsTab.RESULTS -> Icons.Default.TableChart
             SettingsTab.CONNECTION -> Icons.Default.Storage
             SettingsTab.APPEARANCE -> Icons.Default.Palette
@@ -116,6 +119,7 @@ private fun SettingsTabItem(
     val label =
         when (tab) {
             SettingsTab.EDITOR -> "Editor"
+            SettingsTab.FORMATTING -> "Formatting"
             SettingsTab.RESULTS -> "Results"
             SettingsTab.CONNECTION -> "Connection"
             SettingsTab.APPEARANCE -> "Appearance"
@@ -220,6 +224,104 @@ private fun EditorSettings(
             description = "Show auto-complete suggestions while typing",
             checked = state.autoComplete,
             onCheckedChange = { onEvent(SettingsEvent.UpdateAutoComplete(it)) },
+        )
+    }
+}
+
+@Composable
+private fun FormattingSettings(
+    state: SettingsState,
+    onEvent: (SettingsEvent) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Formatting Presets", style = MaterialTheme.typography.titleMedium)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Keyword Casing
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Keyword Casing", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(4.dp))
+                su.kidoz.feature.editor.format.KeywordCasing.entries.forEach { casing ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { onEvent(SettingsEvent.UpdateFormatKeywordCasing(casing)) },
+                    ) {
+                        RadioButton(
+                            selected = state.formatKeywordCasing == casing,
+                            onClick = { onEvent(SettingsEvent.UpdateFormatKeywordCasing(casing)) },
+                        )
+                        Text(casing.name.lowercase().replaceFirstChar { it.uppercase() })
+                    }
+                }
+            }
+
+            // Identifier Casing
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Identifier Casing", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(4.dp))
+                su.kidoz.feature.editor.format.KeywordCasing.entries.forEach { casing ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { onEvent(SettingsEvent.UpdateFormatIdentifierCasing(casing)) },
+                    ) {
+                        RadioButton(
+                            selected = state.formatIdentifierCasing == casing,
+                            onClick = { onEvent(SettingsEvent.UpdateFormatIdentifierCasing(casing)) },
+                        )
+                        Text(casing.name.lowercase().replaceFirstChar { it.uppercase() })
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider()
+
+        // Indent Size
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Indent Size")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(2, 4, 8).forEach { size ->
+                    FilterChip(
+                        selected = state.formatIndentSize == size,
+                        onClick = { onEvent(SettingsEvent.UpdateFormatIndentSize(size)) },
+                        label = { Text("$size") },
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider()
+
+        // Toggle options
+        SettingsToggle(
+            label = "Use Tabs",
+            description = "Use tabs instead of spaces for indentation",
+            checked = state.formatUseTabs,
+            onCheckedChange = { onEvent(SettingsEvent.UpdateFormatUseTabs(it)) },
+        )
+
+        SettingsToggle(
+            label = "Expand Comma Lists",
+            description = "Place each column in SELECT and UPDATE on a new line",
+            checked = state.formatExpandCommaLists,
+            onCheckedChange = { onEvent(SettingsEvent.UpdateFormatExpandCommaLists(it)) },
+        )
+
+        SettingsToggle(
+            label = "Space Around Operators",
+            description = "Add space around = and other binary operators",
+            checked = state.formatSpaceAroundOperators,
+            onCheckedChange = { onEvent(SettingsEvent.UpdateFormatSpaceAroundOperators(it)) },
         )
     }
 }

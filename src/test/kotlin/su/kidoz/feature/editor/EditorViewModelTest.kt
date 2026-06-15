@@ -29,6 +29,8 @@ class EditorViewModelTest {
     private lateinit var connectionManager: ConnectionManager
     private lateinit var queryExecutor: QueryExecutor
     private lateinit var queryHistoryRepository: QueryHistoryRepository
+    private lateinit var autocompleteProvider: su.kidoz.feature.editor.autocomplete.AutocompleteProvider
+    private lateinit var settingsRepository: su.kidoz.core.repository.SettingsRepository
     private lateinit var viewModel: EditorViewModel
 
     @BeforeEach
@@ -37,6 +39,8 @@ class EditorViewModelTest {
         connectionManager = mockk(relaxed = true)
         queryExecutor = mockk(relaxed = true)
         queryHistoryRepository = mockk(relaxed = true)
+        autocompleteProvider = mockk(relaxed = true)
+        settingsRepository = mockk(relaxed = true)
 
         coEvery { connectionManager.activeConnectionId } returns MutableStateFlow<String?>(null)
         coEvery { connectionManager.activeConnection } returns null
@@ -47,7 +51,8 @@ class EditorViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): EditorViewModel = EditorViewModel(connectionManager, queryExecutor, queryHistoryRepository)
+    private fun createViewModel(): EditorViewModel =
+        EditorViewModel(connectionManager, queryExecutor, queryHistoryRepository, autocompleteProvider, settingsRepository)
 
     @Test
     fun initialState_hasOneTab() =
@@ -346,6 +351,7 @@ class EditorViewModelTest {
             viewModel.onEvent(EditorEvent.UpdateContent("SELECT * FROM users WHERE id = 1"))
 
             viewModel.onEvent(EditorEvent.Format)
+            advanceUntilIdle()
 
             val content =
                 viewModel.state.value.activeTab

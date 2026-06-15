@@ -42,5 +42,14 @@ class SettingsRepository(
         const val HIGHLIGHT_CURRENT_LINE = "highlight_current_line"
         const val MAX_RESULT_ROWS = "max_result_rows"
         const val QUERY_TIMEOUT = "query_timeout"
+
+        // Formatting presets
+        const val FORMAT_KEYWORD_CASING = "format_keyword_casing"
+        const val FORMAT_IDENTIFIER_CASING = "format_identifier_casing"
+        const val FORMAT_FUNCTION_CASING = "format_function_casing"
+        const val FORMAT_INDENT_SIZE = "format_indent_size"
+        const val FORMAT_USE_TABS = "format_use_tabs"
+        const val FORMAT_EXPAND_COMMA_LISTS = "format_expand_comma_lists"
+        const val FORMAT_SPACE_AROUND_OPERATORS = "format_space_around_operators"
     }
 }

@@ -128,14 +128,15 @@ class ThemeModeTest {
 
 class SettingsTabTest {
     @Test
-    fun settingsTab_hasFourEntries() {
-        assertEquals(4, SettingsTab.entries.size)
+    fun settingsTab_hasFiveEntries() {
+        assertEquals(5, SettingsTab.entries.size)
     }
 
     @Test
     fun settingsTab_containsExpectedValues() {
         val tabs = SettingsTab.entries
         assertTrue(tabs.contains(SettingsTab.EDITOR))
+        assertTrue(tabs.contains(SettingsTab.FORMATTING))
         assertTrue(tabs.contains(SettingsTab.RESULTS))
         assertTrue(tabs.contains(SettingsTab.CONNECTION))
         assertTrue(tabs.contains(SettingsTab.APPEARANCE))

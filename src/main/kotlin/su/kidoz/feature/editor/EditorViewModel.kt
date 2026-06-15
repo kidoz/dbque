@@ -26,6 +26,7 @@ class EditorViewModel(
     private val queryExecutor: QueryExecutor,
     private val queryHistoryRepository: QueryHistoryRepository,
     private val autocompleteProvider: AutocompleteProvider,
+    private val settingsRepository: su.kidoz.core.repository.SettingsRepository,
 ) : MviViewModel<EditorState, EditorEvent, EditorEffect>(EditorState()) {
     private var executionJob: Job? = null
     private var tabCounter = 1
@@ -793,60 +794,81 @@ class EditorViewModel(
     }
 
     private fun formatSql() {
-        // Basic SQL formatting
         val activeTab = currentState.activeTab ?: return
-        val formatted = formatSqlSimple(activeTab.content)
 
-        if (formatted == activeTab.content) return
+        viewModelScope.launch {
+            // Load formatting presets from settings
+            val keywordCasingStr = settingsRepository.getSetting(su.kidoz.core.repository.SettingsRepository.FORMAT_KEYWORD_CASING)
+            val keywordCasing =
+                su.kidoz.feature.editor.format.KeywordCasing.entries
+                    .find { it.name == keywordCasingStr }
+                    ?: su.kidoz.feature.editor.format.KeywordCasing.UPPERCASE
 
-        val snapshot = EditorSnapshot(activeTab.content, activeTab.cursorPosition)
-        val newUndoStack = (activeTab.undoStack + snapshot).takeLast(EditorTab.MAX_UNDO_STACK_SIZE)
+            val identifierCasingStr = settingsRepository.getSetting(su.kidoz.core.repository.SettingsRepository.FORMAT_IDENTIFIER_CASING)
+            val identifierCasing =
+                su.kidoz.feature.editor.format.KeywordCasing.entries
+                    .find { it.name == identifierCasingStr }
+                    ?: su.kidoz.feature.editor.format.KeywordCasing.UNCHANGED
 
-        // Keep cursor in bounds
-        val newCursor = activeTab.cursorPosition.coerceAtMost(formatted.length)
+            val indentSize =
+                settingsRepository
+                    .getSetting(
+                        su.kidoz.core.repository.SettingsRepository.FORMAT_INDENT_SIZE,
+                    )?.toIntOrNull() ?: 4
+            val useTabs = settingsRepository.getSetting(su.kidoz.core.repository.SettingsRepository.FORMAT_USE_TABS)?.toBoolean() ?: false
+            val expandCommaLists =
+                settingsRepository.getSetting(su.kidoz.core.repository.SettingsRepository.FORMAT_EXPAND_COMMA_LISTS)?.toBoolean() ?: true
+            val spaceAroundOperators =
+                settingsRepository.getSetting(su.kidoz.core.repository.SettingsRepository.FORMAT_SPACE_AROUND_OPERATORS)?.toBoolean()
+                    ?: true
 
-        updateState {
-            copy(
-                tabs =
-                    tabs.map { tab ->
-                        if (tab.id == activeTabId) {
-                            tab.copy(
-                                content = formatted,
-                                cursorPosition = newCursor,
-                                isModified = true,
-                                undoStack = newUndoStack,
-                                redoStack = emptyList(),
-                                isValidating = true,
-                            )
-                        } else {
-                            tab
-                        }
-                    },
-            )
-        }
+            val preset =
+                su.kidoz.feature.editor.format.SqlFormatPreset(
+                    keywordCasing = keywordCasing,
+                    identifierCasing = identifierCasing,
+                    indentSize = indentSize,
+                    useTabs = useTabs,
+                    expandCommaLists = expandCommaLists,
+                    spaceAroundOperators = spaceAroundOperators,
+                )
 
-        // Re-validate after format
-        triggerValidation(activeTab.id, formatted)
-    }
+            // Use AST-based formatter
+            val formatter =
+                su.kidoz.feature.editor.format
+                    .SqlFormatter(preset)
+            val formatted = formatter.format(activeTab.content)
 
-    private fun formatSqlSimple(sql: String): String {
-        val pattern =
-            Regex(
-                """(--[^\n]*\n?|/\*.*?\*/|'(?:[^']|'')*'|"(?:[^"]|"")*"|(?i)\b(SELECT|FROM|WHERE|AND|OR|ORDER\s+BY|GROUP\s+BY|HAVING|JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|OUTER\s+JOIN|ON|INSERT\s+INTO|VALUES|UPDATE|SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|LIMIT|OFFSET)\b)""",
-                RegexOption.DOT_MATCHES_ALL,
-            )
+            if (formatted == activeTab.content) return@launch
 
-        val formatted =
-            pattern.replace(sql) { matchResult ->
-                val value = matchResult.value
-                val firstChar = value.firstOrNull()
-                if (firstChar == '\'' || firstChar == '"' || firstChar == '-' || firstChar == '/') {
-                    value // Preserve strings and comments
-                } else {
-                    "\n${value.uppercase().replace(Regex("\\s+"), " ")}" // Format keywords
-                }
+            val snapshot = EditorSnapshot(activeTab.content, activeTab.cursorPosition)
+            val newUndoStack = (activeTab.undoStack + snapshot).takeLast(EditorTab.MAX_UNDO_STACK_SIZE)
+
+            // Keep cursor in bounds
+            val newCursor = activeTab.cursorPosition.coerceAtMost(formatted.length)
+
+            updateState {
+                copy(
+                    tabs =
+                        tabs.map { tab ->
+                            if (tab.id == activeTabId) {
+                                tab.copy(
+                                    content = formatted,
+                                    cursorPosition = newCursor,
+                                    isModified = true,
+                                    undoStack = newUndoStack,
+                                    redoStack = emptyList(),
+                                    isValidating = true,
+                                )
+                            } else {
+                                tab
+                            }
+                        },
+                )
             }
-        return formatted.trim().replace(Regex("\n[ \t]*\n+"), "\n")
+
+            // Re-validate after format
+            triggerValidation(activeTab.id, formatted)
+        }
     }
 
     private fun findReplace(

@@ -36,6 +36,31 @@ sealed interface SettingsEvent : UiEvent {
         val enabled: Boolean,
     ) : SettingsEvent
 
+    // Formatting settings
+    data class UpdateFormatKeywordCasing(
+        val casing: su.kidoz.feature.editor.format.KeywordCasing,
+    ) : SettingsEvent
+
+    data class UpdateFormatIdentifierCasing(
+        val casing: su.kidoz.feature.editor.format.KeywordCasing,
+    ) : SettingsEvent
+
+    data class UpdateFormatIndentSize(
+        val size: Int,
+    ) : SettingsEvent
+
+    data class UpdateFormatUseTabs(
+        val useTabs: Boolean,
+    ) : SettingsEvent
+
+    data class UpdateFormatExpandCommaLists(
+        val expand: Boolean,
+    ) : SettingsEvent
+
+    data class UpdateFormatSpaceAroundOperators(
+        val space: Boolean,
+    ) : SettingsEvent
+
     // Results settings
     data class UpdateMaxResultRows(
         val rows: Int,
