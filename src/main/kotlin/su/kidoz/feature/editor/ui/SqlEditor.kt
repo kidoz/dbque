@@ -154,7 +154,7 @@ fun SqlEditor(
             errorCount = validationIssues.count { it.severity == IssueSeverity.ERROR },
             onExecuteCurrent = { onEvent(EditorEvent.ExecuteCurrentQuery) },
             onExecuteAll = { onEvent(EditorEvent.ExecuteAllQueries) },
-            onExecuteSelected = { onEvent(EditorEvent.ExecuteSelectedQuery) },
+            onExecuteSelected = { onEvent(EditorEvent.ExecuteSelectedText(it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -316,7 +316,7 @@ fun SqlEditor(
                                                 !keyEvent.isShiftPressed &&
                                                 keyEvent.key == Key.E -> {
                                                 if (tab.selectedText.isNotEmpty()) {
-                                                    onEvent(EditorEvent.ExecuteSelectedQuery)
+                                                    onEvent(EditorEvent.ExecuteSelectedText(tab.selectedText))
                                                 } else {
                                                     onEvent(EditorEvent.ExecuteCurrentQuery)
                                                 }
@@ -488,7 +488,7 @@ private fun EditorToolbar(
     errorCount: Int,
     onExecuteCurrent: () -> Unit,
     onExecuteAll: () -> Unit,
-    onExecuteSelected: () -> Unit,
+    onExecuteSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Calculate number of queries in selection
@@ -583,7 +583,7 @@ private fun EditorToolbar(
             // Execute selection button (shown when text is selected)
             if (hasSelection) {
                 TextButton(
-                    onClick = onExecuteSelected,
+                    onClick = { onExecuteSelected(selectedText) },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     colors =
                         ButtonDefaults.textButtonColors(

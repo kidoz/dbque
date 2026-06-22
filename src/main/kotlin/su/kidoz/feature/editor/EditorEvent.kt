@@ -44,6 +44,10 @@ sealed interface EditorEvent : UiEvent {
 
     data object ExecuteSelectedQuery : EditorEvent
 
+    data class ExecuteSelectedText(
+        val text: String,
+    ) : EditorEvent
+
     /** Execute only the query where the cursor is currently positioned */
     data object ExecuteCurrentQuery : EditorEvent
 

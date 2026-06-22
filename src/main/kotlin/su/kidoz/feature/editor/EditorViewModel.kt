@@ -55,6 +55,7 @@ class EditorViewModel(
             is EditorEvent.InsertText -> insertText(event.text)
             is EditorEvent.ExecuteQuery -> executeQuery()
             is EditorEvent.ExecuteSelectedQuery -> executeSelectedQuery()
+            is EditorEvent.ExecuteSelectedText -> executeSelectedText(event.text)
             is EditorEvent.ExecuteCurrentQuery -> executeCurrentQuery()
             is EditorEvent.ExecuteAllQueries -> executeAllQueries()
             is EditorEvent.CancelExecution -> cancelExecution()
@@ -553,7 +554,16 @@ class EditorViewModel(
 
     private fun executeSelectedQuery() {
         val activeTab = currentState.activeTab ?: return
-        val query = activeTab.queryToExecute.trim()
+        val query = activeTab.selectedText.trim()
+        if (query.isEmpty()) {
+            sendEffect(EditorEffect.ShowMessage("No selected query to execute"))
+            return
+        }
+        executeQueryInternal(query)
+    }
+
+    private fun executeSelectedText(text: String) {
+        val query = text.trim()
         if (query.isEmpty()) return
         executeQueryInternal(query)
     }
