@@ -174,7 +174,7 @@ Settings are stored in `~/Library/Application Support/DBQue/` (macOS),
 ## Roadmap
 
 - [ ] ER diagram generator and visual schema editor
-- [ ] SQL code formatting with style presets
+- [x] SQL code formatting with style presets
 - [ ] Symbol-aware refactoring (rename columns/tables with usage tracking)
 - [ ] Snippet library and named parameter substitution
 - [ ] Multi-cursor editing and code folding
