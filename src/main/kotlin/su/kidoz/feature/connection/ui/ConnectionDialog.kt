@@ -264,11 +264,13 @@ fun ConnectionDialog(
                             )
                         }
 
-                        // Database
+                        // Database (optional for StarRocks - the explorer lists all databases)
                         OutlinedTextField(
                             value = state.database,
                             onValueChange = { onEvent(ConnectionEvent.UpdateDatabase(it)) },
-                            label = { Text("Database") },
+                            label = {
+                                Text(if (state.type == DatabaseType.STARROCKS) "Database (optional)" else "Database")
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                         )

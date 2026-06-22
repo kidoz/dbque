@@ -47,12 +47,16 @@ data class ConnectionDialogState(
                 when (type) {
                     DatabaseType.SQLITE, DatabaseType.H2 -> path.isNotBlank()
 
+                    // MongoDB database is optional
                     DatabaseType.MONGODB -> host.isNotBlank()
 
-                    // MongoDB database is optional
+                    // Elasticsearch only needs host
                     DatabaseType.ELASTICSEARCH -> host.isNotBlank()
 
-                    // Elasticsearch only needs host
+                    // StarRocks accepts a database-less connection (MySQL protocol); the
+                    // explorer falls back to the first database via SHOW DATABASES.
+                    DatabaseType.STARROCKS -> host.isNotBlank()
+
                     else -> host.isNotBlank() && database.isNotBlank()
                 }
 
