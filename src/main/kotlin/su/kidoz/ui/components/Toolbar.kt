@@ -55,12 +55,6 @@ fun MainToolbar(
                     onClick = onShowQuery,
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                 ) {
-                    Icon(
-                        Icons.Default.Code,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
                     Text("Query")
                 }
                 SegmentedButton(
@@ -68,12 +62,6 @@ fun MainToolbar(
                     onClick = onShowDiagram,
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                 ) {
-                    Icon(
-                        Icons.Default.AccountTree,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
                     Text("Diagram")
                 }
             }
