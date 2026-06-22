@@ -24,6 +24,10 @@ import su.kidoz.feature.connection.ConnectionEffect
 import su.kidoz.feature.connection.ConnectionViewModel
 import su.kidoz.feature.connection.ui.ConnectionDialog
 import su.kidoz.feature.connection.ui.ConnectionList
+import su.kidoz.feature.diagram.DiagramEffect
+import su.kidoz.feature.diagram.DiagramEvent
+import su.kidoz.feature.diagram.DiagramViewModel
+import su.kidoz.feature.diagram.ui.ErDiagramPanel
 import su.kidoz.feature.editor.EditorEffect
 import su.kidoz.feature.editor.EditorEvent
 import su.kidoz.feature.editor.EditorViewModel
@@ -66,11 +70,17 @@ private enum class ResultsTab(
     History("History"),
 }
 
+private enum class WorkspaceMode {
+    Query,
+    Diagram,
+}
+
 @Composable
 fun MainWindow() {
     val connectionViewModel: ConnectionViewModel = koinInject()
     val explorerViewModel: ExplorerViewModel = koinInject()
     val editorViewModel: EditorViewModel = koinInject()
+    val diagramViewModel: DiagramViewModel = koinInject()
     val resultsViewModel: ResultsViewModel = koinInject()
     val historyViewModel: HistoryViewModel = koinInject()
     val queryPlanViewModel: QueryPlanViewModel = koinInject()
@@ -81,6 +91,7 @@ fun MainWindow() {
     val connectionState by connectionViewModel.state.collectAsState()
     val explorerState by explorerViewModel.state.collectAsState()
     val editorState by editorViewModel.state.collectAsState()
+    val diagramState by diagramViewModel.state.collectAsState()
     val resultsState by resultsViewModel.state.collectAsState()
     val historyState by historyViewModel.state.collectAsState()
     val queryPlanState by queryPlanViewModel.state.collectAsState()
@@ -89,6 +100,7 @@ fun MainWindow() {
 
     val snackbarHostState = remember { SnackbarHostState() }
     var activeResultsTab by remember { mutableStateOf(ResultsTab.Results) }
+    var activeWorkspace by remember { mutableStateOf(WorkspaceMode.Query) }
 
     // Handle effects
     LaunchedEffect(Unit) {
@@ -155,6 +167,19 @@ fun MainWindow() {
 
                     is ExplorerEffect.IndexUpdated -> {
                         snackbarHostState.showSnackbar("Index '${effect.indexName}' updated")
+                    }
+                }
+            }.launchIn(this)
+
+        diagramViewModel.effect
+            .onEach { effect ->
+                when (effect) {
+                    is DiagramEffect.ShowError -> {
+                        snackbarHostState.showSnackbar(effect.message)
+                    }
+
+                    is DiagramEffect.ShowMessage -> {
+                        snackbarHostState.showSnackbar(effect.message)
                     }
                 }
             }.launchIn(this)
@@ -275,9 +300,15 @@ fun MainWindow() {
                 MainToolbar(
                     connectionName = activeConnection?.config?.name,
                     isExecuting = editorState.isExecuting,
+                    isDiagramActive = activeWorkspace == WorkspaceMode.Diagram,
                     onExecute = { editorViewModel.onEvent(EditorEvent.ExecuteQuery) },
                     onCancel = { editorViewModel.onEvent(EditorEvent.CancelExecution) },
                     onNewTab = { editorViewModel.onEvent(EditorEvent.NewTab) },
+                    onShowQuery = { activeWorkspace = WorkspaceMode.Query },
+                    onShowDiagram = {
+                        activeWorkspace = WorkspaceMode.Diagram
+                        diagramViewModel.onEvent(DiagramEvent.LoadDiagram)
+                    },
                     onSettings = { settingsViewModel.onEvent(SettingsEvent.ShowDialog) },
                 )
 
@@ -415,7 +446,16 @@ fun MainWindow() {
                             }
                         },
                         secondPane = {
-                            if (isCompact) {
+                            if (activeWorkspace == WorkspaceMode.Diagram) {
+                                ErDiagramPanel(
+                                    state = diagramState,
+                                    onEvent = diagramViewModel::onEvent,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.surface),
+                                )
+                            } else if (isCompact) {
                                 editorAndResultsPane()
                             } else {
                                 HorizontalSplitPane(

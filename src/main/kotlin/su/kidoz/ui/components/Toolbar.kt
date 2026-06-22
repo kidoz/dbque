@@ -14,9 +14,12 @@ import androidx.compose.ui.unit.dp
 fun MainToolbar(
     connectionName: String?,
     isExecuting: Boolean,
+    isDiagramActive: Boolean,
     onExecute: () -> Unit,
     onCancel: () -> Unit,
     onNewTab: () -> Unit,
+    onShowQuery: () -> Unit,
+    onShowDiagram: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -41,6 +44,37 @@ fun MainToolbar(
             ) {
                 IconButton(onClick = onNewTab) {
                     Icon(Icons.Default.Add, "New Tab")
+                }
+            }
+
+            VerticalDivider(modifier = Modifier.height(24.dp))
+
+            SingleChoiceSegmentedButtonRow {
+                SegmentedButton(
+                    selected = !isDiagramActive,
+                    onClick = onShowQuery,
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                ) {
+                    Icon(
+                        Icons.Default.Code,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Query")
+                }
+                SegmentedButton(
+                    selected = isDiagramActive,
+                    onClick = onShowDiagram,
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                ) {
+                    Icon(
+                        Icons.Default.AccountTree,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Diagram")
                 }
             }
 

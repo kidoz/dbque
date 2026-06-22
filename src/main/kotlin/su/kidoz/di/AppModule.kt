@@ -10,6 +10,7 @@ import su.kidoz.database.ConnectionManager
 import su.kidoz.database.executor.QueryExecutor
 import su.kidoz.database.ssh.SshTunnelManager
 import su.kidoz.feature.connection.ConnectionViewModel
+import su.kidoz.feature.diagram.DiagramViewModel
 import su.kidoz.feature.editor.EditorViewModel
 import su.kidoz.feature.editor.autocomplete.AutocompleteProvider
 import su.kidoz.feature.explorer.ExplorerViewModel
@@ -52,6 +53,7 @@ val appModule =
         single { ConnectionViewModel(get(), get()) }
         single { ExplorerViewModel(get()) }
         single { EditorViewModel(get(), get(), get(), get(), get()) }
+        single { DiagramViewModel(get()) }
         single { ResultsViewModel(get()) }
         single { HistoryViewModel(get(), get()) }
         single { QueryPlanViewModel(get()) }
