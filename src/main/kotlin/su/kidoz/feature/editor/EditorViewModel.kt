@@ -563,8 +563,12 @@ class EditorViewModel(
     }
 
     private fun executeSelectedText(text: String) {
-        val query = text.trim()
-        if (query.isEmpty()) return
+        val activeTab = currentState.activeTab ?: return
+        val query = text.trim().ifEmpty { activeTab.selectedText.trim() }
+        if (query.isEmpty()) {
+            sendEffect(EditorEffect.ShowMessage("No selected query to execute"))
+            return
+        }
         executeQueryInternal(query)
     }
 

@@ -399,6 +399,33 @@ class EditorViewModelTest {
         }
 
     @Test
+    fun executeSelectedText_withEmptySnapshotUsesStateSelection() =
+        runTest {
+            viewModel = createViewModel()
+            viewModel.onEvent(EditorEvent.UpdateContent("SELECT 1; SELECT 2"))
+            viewModel.onEvent(EditorEvent.UpdateSelection(10, 18))
+
+            viewModel.effect.test {
+                viewModel.onEvent(EditorEvent.ExecuteSelectedText(""))
+                val effect = awaitItem() as EditorEffect.QueryError
+                assertEquals("No active connection", effect.message)
+            }
+        }
+
+    @Test
+    fun executeSelectedText_withoutSnapshotOrSelectionShowsMessage() =
+        runTest {
+            viewModel = createViewModel()
+            viewModel.onEvent(EditorEvent.UpdateContent("SELECT 1"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(EditorEvent.ExecuteSelectedText(""))
+                val effect = awaitItem() as EditorEffect.ShowMessage
+                assertEquals("No selected query to execute", effect.message)
+            }
+        }
+
+    @Test
     fun cancelExecution_stopsExecution() =
         runTest {
             viewModel = createViewModel()
