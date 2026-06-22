@@ -2,8 +2,7 @@ package su.kidoz.database.driver
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import su.kidoz.core.model.DatabaseType
-import su.kidoz.core.model.SchemaInfo
+import su.kidoz.core.model.*
 import su.kidoz.database.capabilities.*
 import java.sql.Connection
 
@@ -29,6 +28,133 @@ open class MySqlDriver : AbstractDatabaseDriver() {
             }
             schemas
         }
+
+    // ==================== Database-Scoped Metadata ====================
+    //
+    // MySQL Connector/J exposes databases as JDBC *catalogs*, not schemas, so
+    // `DatabaseMetaData.getTables(catalog, schemaPattern, ...)` ignores the schema
+    // argument and a null catalog enumerates every database. The explorer passes the
+    // database name as `schema`, so the inherited metadata calls would return tables
+    // from all databases with a null `TABLE_SCHEM` - producing cross-database
+    // duplicates and non-unique tree keys. These overrides scope to a single database
+    // and populate `schema` with the real database name.
+
+    override suspend fun getTables(
+        connection: Connection,
+        schema: String?,
+        catalog: String?,
+    ): List<TableInfo> =
+        withContext(Dispatchers.IO) {
+            val dbName =
+                schema ?: catalog ?: connection.catalog
+                    ?: return@withContext super.getTables(connection, schema, catalog)
+
+            val sql =
+                """
+                SELECT TABLE_NAME, TABLE_SCHEMA, TABLE_COMMENT
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_NAME
+                """.trimIndent()
+
+            try {
+                connection.prepareStatement(sql).use { ps ->
+                    ps.setString(1, dbName)
+                    ps.executeQuery().use { rs ->
+                        val tables = mutableListOf<TableInfo>()
+                        while (rs.next()) {
+                            tables.add(
+                                TableInfo(
+                                    name = rs.getString("TABLE_NAME"),
+                                    schema = rs.getString("TABLE_SCHEMA"),
+                                    catalog = null,
+                                    type = TableType.TABLE,
+                                    comment = rs.getString("TABLE_COMMENT")?.takeIf { it.isNotEmpty() },
+                                ),
+                            )
+                        }
+                        tables
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to list MySQL tables, falling back to JDBC metadata" }
+                super.getTables(connection, schema, catalog)
+            }
+        }
+
+    override suspend fun getViews(
+        connection: Connection,
+        schema: String?,
+        catalog: String?,
+    ): List<ViewInfo> =
+        withContext(Dispatchers.IO) {
+            val dbName =
+                schema ?: catalog ?: connection.catalog
+                    ?: return@withContext super.getViews(connection, schema, catalog)
+
+            val sql =
+                """
+                SELECT TABLE_NAME, TABLE_SCHEMA, TABLE_COMMENT
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'VIEW'
+                ORDER BY TABLE_NAME
+                """.trimIndent()
+
+            try {
+                connection.prepareStatement(sql).use { ps ->
+                    ps.setString(1, dbName)
+                    ps.executeQuery().use { rs ->
+                        val views = mutableListOf<ViewInfo>()
+                        while (rs.next()) {
+                            views.add(
+                                ViewInfo(
+                                    name = rs.getString("TABLE_NAME"),
+                                    schema = rs.getString("TABLE_SCHEMA"),
+                                    catalog = null,
+                                    comment = rs.getString("TABLE_COMMENT")?.takeIf { it.isNotEmpty() },
+                                ),
+                            )
+                        }
+                        views
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to list MySQL views, falling back to JDBC metadata" }
+                super.getViews(connection, schema, catalog)
+            }
+        }
+
+    // The remaining metadata lookups go through JDBC `DatabaseMetaData`, which filters by
+    // catalog for MySQL. Move the database name into the catalog position so a table that
+    // exists in several databases resolves to the correct one.
+
+    override suspend fun getColumns(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): List<ColumnInfo> = super.getColumns(connection, table, schema = null, catalog = schema ?: catalog)
+
+    override suspend fun getPrimaryKey(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): PrimaryKeyInfo? = super.getPrimaryKey(connection, table, schema = null, catalog = schema ?: catalog)
+
+    override suspend fun getForeignKeys(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): List<ForeignKeyInfo> = super.getForeignKeys(connection, table, schema = null, catalog = schema ?: catalog)
+
+    override suspend fun getIndexes(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): List<IndexInfo> = super.getIndexes(connection, table, schema = null, catalog = schema ?: catalog)
 
     override fun escapeIdentifier(identifier: String): String = "`$identifier`"
 
