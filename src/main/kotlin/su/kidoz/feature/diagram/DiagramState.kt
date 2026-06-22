@@ -19,6 +19,8 @@ data class DiagramState(
     val showDdlPreview: Boolean = false,
     val ddlPreview: String = "",
     val maxTables: Int = DEFAULT_MAX_TABLES,
+    val pendingApplyDdl: String? = null,
+    val isApplyingDdl: Boolean = false,
 ) : UiState {
     val selectedTable: DiagramTable?
         get() =

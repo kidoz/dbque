@@ -82,6 +82,18 @@ class DiagramViewModel(
                 copyDdlToClipboard()
             }
 
+            DiagramEvent.RequestApplyDdl -> {
+                requestApplyDdl()
+            }
+
+            DiagramEvent.ConfirmApplyDdl -> {
+                confirmApplyDdl()
+            }
+
+            DiagramEvent.CancelApplyDdl -> {
+                updateState { copy(pendingApplyDdl = null) }
+            }
+
             DiagramEvent.AddTable -> {
                 addTable()
             }
@@ -161,6 +173,58 @@ class DiagramViewModel(
         }
 
         return true
+    }
+
+    private fun requestApplyDdl() {
+        val ddl = currentState.ddlPreview.trim()
+        if (!canExportDdl(ddl)) return
+
+        updateState { copy(pendingApplyDdl = ddl) }
+    }
+
+    private fun confirmApplyDdl() {
+        val ddl = currentState.pendingApplyDdl?.trim().orEmpty()
+        if (ddl.isBlank()) {
+            updateState { copy(pendingApplyDdl = null) }
+            return
+        }
+
+        val activeConnection = connectionManager.activeConnection
+        if (activeConnection == null) {
+            updateState { copy(pendingApplyDdl = null) }
+            sendEffect(DiagramEffect.ShowError("Connect to a database before applying DDL"))
+            return
+        }
+
+        if (activeConnection.config.type in listOf(DatabaseType.MONGODB, DatabaseType.ELASTICSEARCH)) {
+            updateState { copy(pendingApplyDdl = null) }
+            sendEffect(DiagramEffect.ShowError("DDL apply is available for JDBC databases"))
+            return
+        }
+
+        viewModelScope.launch {
+            updateState { copy(isApplyingDdl = true, pendingApplyDdl = null, error = null) }
+            try {
+                val statementCount =
+                    activeConnection.getConnection().use { connection ->
+                        DiagramDdlApplier.apply(connection, ddl)
+                    }
+                if (statementCount == 0) {
+                    sendEffect(DiagramEffect.ShowMessage("No DDL statements to apply"))
+                    updateState { copy(isApplyingDdl = false) }
+                    return@launch
+                }
+
+                sendEffect(DiagramEffect.DdlApplied(statementCount))
+                updateState { copy(isApplyingDdl = false) }
+                loadDiagram()
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to apply diagram DDL" }
+                val message = e.message ?: "Failed to apply DDL"
+                updateState { copy(isApplyingDdl = false, error = message) }
+                sendEffect(DiagramEffect.ShowError(message))
+            }
+        }
     }
 
     private fun loadDiagram() {

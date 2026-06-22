@@ -14,4 +14,8 @@ sealed interface DiagramEffect : UiEffect {
     data class InsertIntoEditor(
         val sql: String,
     ) : DiagramEffect
+
+    data class DdlApplied(
+        val statementCount: Int,
+    ) : DiagramEffect
 }

@@ -39,6 +39,12 @@ sealed interface DiagramEvent : UiEvent {
 
     data object CopyDdlToClipboard : DiagramEvent
 
+    data object RequestApplyDdl : DiagramEvent
+
+    data object ConfirmApplyDdl : DiagramEvent
+
+    data object CancelApplyDdl : DiagramEvent
+
     data object AddTable : DiagramEvent
 
     data class AddRelationship(

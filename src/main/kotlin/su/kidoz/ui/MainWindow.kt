@@ -174,6 +174,10 @@ fun MainWindow() {
         diagramViewModel.effect
             .onEach { effect ->
                 when (effect) {
+                    is DiagramEffect.DdlApplied -> {
+                        snackbarHostState.showSnackbar("Applied ${effect.statementCount} DDL statement(s)")
+                    }
+
                     is DiagramEffect.InsertIntoEditor -> {
                         editorViewModel.insertText(effect.sql)
                     }

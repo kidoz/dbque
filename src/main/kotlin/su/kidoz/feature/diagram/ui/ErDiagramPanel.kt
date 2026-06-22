@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -80,39 +82,49 @@ fun ErDiagramPanel(
     onEvent: (DiagramEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.surface)) {
-        DiagramToolbar(state = state, onEvent = onEvent)
+    Box(modifier = modifier.background(MaterialTheme.colorScheme.surface)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            DiagramToolbar(state = state, onEvent = onEvent)
 
-        if (state.isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.CircularProgressIndicator()
-            }
-        } else if (state.error != null) {
-            Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = state.error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
+            if (state.isLoading || state.isApplyingDdl) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else if (state.error != null) {
+                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = state.error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            } else {
+                HorizontalSplitPane(
+                    splitFraction = if (state.showDdlPreview) 0.72f else 0.78f,
+                    firstPane = {
+                        DiagramCanvas(
+                            state = state,
+                            onEvent = onEvent,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                    secondPane = {
+                        DiagramInspector(
+                            state = state,
+                            onEvent = onEvent,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
                 )
             }
-        } else {
-            HorizontalSplitPane(
-                splitFraction = if (state.showDdlPreview) 0.72f else 0.78f,
-                firstPane = {
-                    DiagramCanvas(
-                        state = state,
-                        onEvent = onEvent,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                },
-                secondPane = {
-                    DiagramInspector(
-                        state = state,
-                        onEvent = onEvent,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                },
-                modifier = Modifier.weight(1f),
+        }
+
+        state.pendingApplyDdl?.let { ddl ->
+            ApplyDdlDialog(
+                ddl = ddl,
+                onConfirm = { onEvent(DiagramEvent.ConfirmApplyDdl) },
+                onCancel = { onEvent(DiagramEvent.CancelApplyDdl) },
             )
         }
     }
@@ -200,8 +212,56 @@ private fun DiagramToolbar(
                 Spacer(Modifier.width(6.dp))
                 Text("Insert")
             }
+
+            Button(onClick = { onEvent(DiagramEvent.RequestApplyDdl) }) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Apply")
+            }
         }
     }
+}
+
+@Composable
+private fun ApplyDdlDialog(
+    ddl: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Apply DDL") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("This will execute the generated DDL in a transaction and refresh the diagram.")
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp),
+                ) {
+                    Text(
+                        text = ddl,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
