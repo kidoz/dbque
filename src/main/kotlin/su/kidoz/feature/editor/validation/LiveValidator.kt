@@ -111,7 +111,8 @@ class LiveValidator(
 
             val dialect =
                 when (input.databaseType) {
-                    DatabaseType.MYSQL, DatabaseType.STARROCKS -> SqlDialect.MYSQL
+                    DatabaseType.MYSQL -> SqlDialect.MYSQL
+                    DatabaseType.STARROCKS -> SqlDialect.STARROCKS
                     DatabaseType.SQLITE -> SqlDialect.SQLITE
                     else -> SqlDialect.POSTGRESQL
                 }

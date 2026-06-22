@@ -248,7 +248,10 @@ class AutocompleteProvider(
     }
 
     private fun getKeywordSuggestions(prefix: String): List<AutocompleteItem> =
-        sqlKeywords
+        // Merge the curated cross-dialect list with driver-reported keywords (e.g. StarRocks
+        // DISTRIBUTED/PROPERTIES) so dialect-specific syntax is offered too.
+        (sqlKeywords + cachedKeywords.map { it.uppercase() })
+            .distinct()
             .filter { it.startsWith(prefix) }
             .map { keyword ->
                 AutocompleteItem(

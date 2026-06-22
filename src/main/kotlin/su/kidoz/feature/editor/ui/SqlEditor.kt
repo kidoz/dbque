@@ -459,12 +459,9 @@ class QuerySyntaxHighlightTransformation(
 
         val dialect =
             when (databaseType) {
-                su.kidoz.core.model.DatabaseType.MYSQL,
-                su.kidoz.core.model.DatabaseType.STARROCKS,
-                -> su.kidoz.feature.parser.sql.SqlDialect.MYSQL
-
+                su.kidoz.core.model.DatabaseType.MYSQL -> su.kidoz.feature.parser.sql.SqlDialect.MYSQL
+                su.kidoz.core.model.DatabaseType.STARROCKS -> su.kidoz.feature.parser.sql.SqlDialect.STARROCKS
                 su.kidoz.core.model.DatabaseType.SQLITE -> su.kidoz.feature.parser.sql.SqlDialect.SQLITE
-
                 else -> su.kidoz.feature.parser.sql.SqlDialect.POSTGRESQL
             }
 

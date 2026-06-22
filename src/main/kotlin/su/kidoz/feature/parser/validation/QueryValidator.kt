@@ -159,6 +159,18 @@ class SqlValidator(
             "EXCEPT" to DatabaseVersion(8, 0),
         )
 
+    // StarRocks shipped these analytical features early, so the minimum versions are low and
+    // the gating mainly guards against running very old clusters. Recursive CTEs (4.1) are the
+    // only recent addition; the non-recursive CTE/window features predate the 3.x line.
+    private val starrocksFeatures =
+        mapOf(
+            "CTE" to DatabaseVersion(2, 0),
+            "WINDOW" to DatabaseVersion(2, 0),
+            "INTERSECT" to DatabaseVersion(3, 0),
+            "EXCEPT" to DatabaseVersion(3, 0),
+            "LATERAL" to DatabaseVersion(3, 0),
+        )
+
     fun validate(sql: String): ValidationResult {
         val issues = mutableListOf<ValidationIssue>()
 
@@ -558,6 +570,7 @@ class SqlValidator(
             when (dialect) {
                 SqlDialect.POSTGRESQL -> postgresFeatures
                 SqlDialect.MYSQL -> mysqlFeatures
+                SqlDialect.STARROCKS -> starrocksFeatures
                 else -> emptyMap()
             }
 

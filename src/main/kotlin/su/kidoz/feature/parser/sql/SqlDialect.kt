@@ -6,6 +6,7 @@ package su.kidoz.feature.parser.sql
 enum class SqlDialect {
     POSTGRESQL,
     MYSQL,
+    STARROCKS,
     SQLITE,
     H2,
     ANSI,

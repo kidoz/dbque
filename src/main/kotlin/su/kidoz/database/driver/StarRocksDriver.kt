@@ -72,6 +72,23 @@ class StarRocksDriver : MySqlDriver() {
         // StarRocks only ever returns a textual plan, so coerce JSON/TREE requests to TEXT.
         super.explainQuery(connection, query, analyze, ExplainFormat.TEXT)
 
+    // ==================== StarRocks Keywords & Functions ====================
+
+    // Surface StarRocks-only DDL/query keywords on top of whatever the MySQL connector reports,
+    // so autocomplete and highlighting understand table-model and distribution syntax.
+    override suspend fun getKeywords(connection: Connection): List<String> =
+        mergeDistinct(super.getKeywords(connection), STARROCKS_KEYWORDS)
+
+    // StarRocks ships a large analytical function library (bitmap/HLL/array/map/JSON/window)
+    // that the MySQL connector's metadata does not know about; add it to completion.
+    override suspend fun getFunctions(connection: Connection): List<String> =
+        mergeDistinct(super.getFunctions(connection), STARROCKS_FUNCTIONS)
+
+    private fun mergeDistinct(
+        base: List<String>,
+        extra: List<String>,
+    ): List<String> = (base + extra).distinctBy { it.uppercase() }
+
     // ==================== StarRocks Constraint & Index Introspection ====================
 
     // StarRocks is an OLAP engine that does not enforce foreign keys, and the MySQL
@@ -115,4 +132,126 @@ class StarRocksDriver : MySqlDriver() {
         schema: String?,
         catalog: String?,
     ): List<IndexStatistics> = emptyList() // StarRocks has no InnoDB secondary-index statistics
+
+    private companion object {
+        // StarRocks-specific keywords beyond the MySQL set (table models, distribution,
+        // partitioning, materialized views, catalogs, loads).
+        val STARROCKS_KEYWORDS =
+            listOf(
+                "AGGREGATE",
+                "DUPLICATE",
+                "DISTRIBUTED",
+                "BUCKETS",
+                "PROPERTIES",
+                "HASH",
+                "RANDOM",
+                "ROLLUP",
+                "MATERIALIZED",
+                "REFRESH",
+                "ASYNC",
+                "MANUAL",
+                "EVERY",
+                "PARTITIONS",
+                "TEMPORARY",
+                "CATALOG",
+                "CATALOGS",
+                "EXTERNAL",
+                "RESOURCE",
+                "BROKER",
+                "ROUTINE",
+                "LOAD",
+                "STREAM",
+                "COLOCATE",
+                "BITMAP",
+                "HLL",
+                "PERCENTILE",
+                "STRUCT",
+                "ARRAY",
+                "MAP",
+                "JSON",
+                "LARGEINT",
+                "STORAGE",
+                "WAREHOUSE",
+                "PIPE",
+                "TASK",
+                "FILES",
+                "OVERWRITE",
+            )
+
+        // A curated slice of StarRocks' analytical function library for completion.
+        val STARROCKS_FUNCTIONS =
+            listOf(
+                // bitmap
+                "to_bitmap",
+                "bitmap_union",
+                "bitmap_count",
+                "bitmap_and",
+                "bitmap_or",
+                "bitmap_xor",
+                "bitmap_contains",
+                "bitmap_to_string",
+                "bitmap_from_string",
+                "bitmap_hash",
+                "bitmap_union_count",
+                // HLL
+                "hll_union",
+                "hll_union_agg",
+                "hll_cardinality",
+                "hll_hash",
+                "hll_empty",
+                // approximate / percentile
+                "approx_count_distinct",
+                "percentile_approx",
+                "percentile_cont",
+                "percentile_disc",
+                "multi_distinct_count",
+                // array
+                "array_agg",
+                "array_length",
+                "array_contains",
+                "array_map",
+                "array_filter",
+                "array_sum",
+                "array_sortby",
+                "array_distinct",
+                "array_join",
+                "unnest",
+                // map / struct
+                "map_keys",
+                "map_values",
+                "map_size",
+                "row",
+                "named_struct",
+                // json
+                "parse_json",
+                "json_query",
+                "json_exists",
+                "json_array",
+                "json_object",
+                "get_json_string",
+                "get_json_int",
+                "get_json_double",
+                // date / time
+                "date_trunc",
+                "date_format",
+                "days_diff",
+                "time_slice",
+                "str_to_date",
+                "from_unixtime",
+                "unix_timestamp",
+                // string
+                "split",
+                "split_part",
+                "concat_ws",
+                "regexp_extract",
+                "regexp_replace",
+                "group_concat",
+                // window / aggregate
+                "retention",
+                "window_funnel",
+                "max_by",
+                "min_by",
+                "any_value",
+            )
+    }
 }
