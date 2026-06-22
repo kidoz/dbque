@@ -10,4 +10,8 @@ sealed interface DiagramEffect : UiEffect {
     data class ShowMessage(
         val message: String,
     ) : DiagramEffect
+
+    data class InsertIntoEditor(
+        val sql: String,
+    ) : DiagramEffect
 }

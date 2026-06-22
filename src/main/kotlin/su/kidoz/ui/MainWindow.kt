@@ -174,6 +174,10 @@ fun MainWindow() {
         diagramViewModel.effect
             .onEach { effect ->
                 when (effect) {
+                    is DiagramEffect.InsertIntoEditor -> {
+                        editorViewModel.insertText(effect.sql)
+                    }
+
                     is DiagramEffect.ShowError -> {
                         snackbarHostState.showSnackbar(effect.message)
                     }

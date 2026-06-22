@@ -32,6 +32,9 @@ data class DiagramState(
                 relationships.firstOrNull { it.id == selection.relationshipId }
             }
 
+    val validationIssues: List<String>
+        get() = DiagramDraftValidator.validate(tables, relationships)
+
     companion object {
         const val DEFAULT_MAX_TABLES = 40
     }

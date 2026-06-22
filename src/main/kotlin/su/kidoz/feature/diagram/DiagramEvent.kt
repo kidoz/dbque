@@ -35,7 +35,18 @@ sealed interface DiagramEvent : UiEvent {
 
     data object ToggleDdlPreview : DiagramEvent
 
+    data object InsertDdlIntoEditor : DiagramEvent
+
+    data object CopyDdlToClipboard : DiagramEvent
+
     data object AddTable : DiagramEvent
+
+    data class AddRelationship(
+        val sourceTableId: String,
+        val sourceColumn: String,
+        val targetTableId: String,
+        val targetColumn: String,
+    ) : DiagramEvent
 
     data class RenameSelectedTable(
         val name: String,

@@ -1,5 +1,7 @@
 package su.kidoz.feature.diagram
 
+import su.kidoz.core.model.ForeignKeyRule
+
 object DiagramDdlGenerator {
     fun generate(
         tables: List<DiagramTable>,
@@ -68,10 +70,16 @@ object DiagramDdlGenerator {
             val name = relationship.name?.takeIf { it.isNotBlank() } ?: "fk_${source.name}_${target.name}"
             append("ALTER TABLE ${qualifiedName(source)} ADD CONSTRAINT ${quote(name)} ")
             append("FOREIGN KEY (${relationship.sourceColumns.joinToString { quote(it) }}) ")
-            append("REFERENCES ${qualifiedName(target)} (${relationship.targetColumns.joinToString { quote(it) }});")
+            append("REFERENCES ${qualifiedName(target)} (${relationship.targetColumns.joinToString { quote(it) }})")
+            if (relationship.deleteRule != ForeignKeyRule.NO_ACTION) {
+                append(" ON DELETE ${relationship.deleteRule.toSql()}")
+            }
+            append(";")
         }
 
     private fun qualifiedName(table: DiagramTable): String = table.schema?.let { "${quote(it)}.${quote(table.name)}" } ?: quote(table.name)
 
     private fun quote(identifier: String): String = "\"${identifier.replace("\"", "\"\"")}\""
+
+    private fun ForeignKeyRule.toSql(): String = name.replace('_', ' ')
 }

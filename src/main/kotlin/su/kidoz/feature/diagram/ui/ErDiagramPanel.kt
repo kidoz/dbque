@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,9 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.ZoomIn
@@ -63,7 +66,9 @@ import su.kidoz.feature.diagram.DiagramState
 import su.kidoz.feature.diagram.DiagramTable
 import su.kidoz.ui.components.HorizontalSplitPane
 import su.kidoz.ui.theme.DBQueTheme
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.sqrt
 
 private const val TABLE_WIDTH = 260f
 private const val TABLE_HEADER_HEIGHT = 46f
@@ -177,10 +182,23 @@ private fun DiagramToolbar(
                 Text("Table")
             }
 
-            Button(onClick = { onEvent(DiagramEvent.ToggleDdlPreview) }) {
+            OutlinedButton(onClick = { onEvent(DiagramEvent.ToggleDdlPreview) }) {
                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("DDL")
+            }
+
+            TooltipIconButton(
+                tooltip = "Copy DDL",
+                onClick = { onEvent(DiagramEvent.CopyDdlToClipboard) },
+            ) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Copy DDL")
+            }
+
+            Button(onClick = { onEvent(DiagramEvent.InsertDdlIntoEditor) }) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Insert")
             }
         }
     }
@@ -279,7 +297,18 @@ private fun DiagramCanvas(
                                 .TransformOrigin(0f, 0f),
                     ),
         ) {
-            Canvas(modifier = Modifier.matchParentSize()) {
+            Canvas(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .pointerInput(state.relationships, state.tables) {
+                            detectTapGestures { offset ->
+                                findRelationshipAt(offset, state.tables, state.relationships)?.let { relationship ->
+                                    onEvent(DiagramEvent.SelectRelationship(relationship.id))
+                                }
+                            }
+                        },
+            ) {
                 state.relationships.forEach { relationship ->
                     val source = state.tables.firstOrNull { it.id == relationship.sourceTableId }
                     val target = state.tables.firstOrNull { it.id == relationship.targetTableId }
@@ -449,7 +478,7 @@ private fun DiagramInspector(
             is DiagramSelection.Relationship -> {
                 val relationship = state.relationships.firstOrNull { it.id == selection.relationshipId }
                 if (relationship != null) {
-                    RelationshipInspector(relationship = relationship, tables = state.tables)
+                    RelationshipInspector(relationship = relationship, tables = state.tables, onEvent = onEvent)
                 } else {
                     DiagramSummary(state)
                 }
@@ -458,11 +487,15 @@ private fun DiagramInspector(
             is DiagramSelection.Table -> {
                 val table = state.tables.firstOrNull { it.id == selection.tableId }
                 if (table != null) {
-                    TableInspector(table = table, onEvent = onEvent)
+                    TableInspector(table = table, tables = state.tables, onEvent = onEvent)
                 } else {
                     DiagramSummary(state)
                 }
             }
+        }
+
+        if (state.validationIssues.isNotEmpty()) {
+            ValidationIssues(state.validationIssues)
         }
 
         if (state.showDdlPreview) {
@@ -474,6 +507,7 @@ private fun DiagramInspector(
                         .fillMaxWidth()
                         .weight(1f)
                         .background(MaterialTheme.colorScheme.background, RoundedCornerShape(6.dp))
+                        .verticalScroll(rememberScrollState())
                         .padding(10.dp),
             ) {
                 Text(
@@ -520,10 +554,18 @@ private fun Metric(
 private fun RelationshipInspector(
     relationship: DiagramRelationship,
     tables: List<DiagramTable>,
+    onEvent: (DiagramEvent) -> Unit,
 ) {
     val source = tables.firstOrNull { it.id == relationship.sourceTableId }
     val target = tables.firstOrNull { it.id == relationship.targetTableId }
-    Text("Relationship", style = MaterialTheme.typography.titleSmall)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Relationship", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        if (relationship.isDraft) {
+            IconButton(onClick = { onEvent(DiagramEvent.DeleteSelected) }) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete")
+            }
+        }
+    }
     Text(relationship.name ?: "Foreign key", style = MaterialTheme.typography.bodyMedium)
     Text(
         text =
@@ -544,6 +586,7 @@ private fun RelationshipInspector(
 @Composable
 private fun TableInspector(
     table: DiagramTable,
+    tables: List<DiagramTable>,
     onEvent: (DiagramEvent) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -578,6 +621,129 @@ private fun TableInspector(
     ) {
         table.columns.forEach { column ->
             ColumnEditor(column = column, enabled = table.isDraft || column.isDraft, onEvent = onEvent)
+        }
+
+        DraftRelationshipEditor(table = table, tables = tables, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun ValidationIssues(issues: List<String>) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(6.dp),
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Draft issues",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            issues.take(4).forEach { issue ->
+                Text(
+                    text = issue,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DraftRelationshipEditor(
+    table: DiagramTable,
+    tables: List<DiagramTable>,
+    onEvent: (DiagramEvent) -> Unit,
+) {
+    val targetTables = tables.filter { it.id != table.id }
+    if (targetTables.isEmpty() || table.columns.isEmpty()) return
+
+    val targetKey = targetTables.joinToString("|") { it.id }
+    var sourceColumn by remember(table.id, table.columns.joinToString("|") { it.name }) {
+        mutableStateOf(table.columns.firstOrNull { !it.isPrimaryKey }?.name ?: table.columns.first().name)
+    }
+    var targetTableId by remember(table.id, targetKey) {
+        mutableStateOf(targetTables.first().id)
+    }
+    val targetTable = targetTables.firstOrNull { it.id == targetTableId } ?: targetTables.first()
+    var targetColumn by remember(table.id, targetTable.id, targetTable.columns.joinToString("|") { it.name }) {
+        val defaultTargetColumn =
+            targetTable.columns.firstOrNull { it.isPrimaryKey }
+                ?: targetTable.columns.firstOrNull()
+        mutableStateOf(
+            defaultTargetColumn?.name.orEmpty(),
+        )
+    }
+
+    HorizontalDivider(modifier = Modifier.padding(top = 6.dp))
+    Text("Draft Relationship", style = MaterialTheme.typography.titleSmall)
+
+    OptionDropdown(
+        label = "Source column",
+        value = sourceColumn,
+        options = table.columns.map { it.name },
+        onSelected = { sourceColumn = it },
+    )
+    OptionDropdown(
+        label = "Target table",
+        value = targetTable.displayName,
+        options = targetTables.map { it.id },
+        optionLabel = { id -> targetTables.firstOrNull { it.id == id }?.displayName ?: id },
+        onSelected = { targetTableId = it },
+    )
+    OptionDropdown(
+        label = "Target column",
+        value = targetColumn,
+        options = targetTable.columns.map { it.name },
+        onSelected = { targetColumn = it },
+    )
+    Button(
+        onClick = {
+            onEvent(
+                DiagramEvent.AddRelationship(
+                    sourceTableId = table.id,
+                    sourceColumn = sourceColumn,
+                    targetTableId = targetTable.id,
+                    targetColumn = targetColumn,
+                ),
+            )
+        },
+        enabled = sourceColumn.isNotBlank() && targetColumn.isNotBlank(),
+    ) {
+        Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Add Relationship")
+    }
+}
+
+@Composable
+private fun OptionDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    optionLabel: (String) -> String = { it },
+    onSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(optionLabel(value), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(optionLabel(option), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        onClick = {
+                            expanded = false
+                            onSelected(option)
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -636,3 +802,47 @@ private fun visibleColumns(
     } else {
         table.columns
     }
+
+private fun findRelationshipAt(
+    point: Offset,
+    tables: List<DiagramTable>,
+    relationships: List<DiagramRelationship>,
+): DiagramRelationship? =
+    relationships.firstOrNull { relationship ->
+        val source = tables.firstOrNull { it.id == relationship.sourceTableId }
+        val target = tables.firstOrNull { it.id == relationship.targetTableId }
+        source != null &&
+            target != null &&
+            distanceToSegment(
+                point = point,
+                start = Offset(source.x + TABLE_WIDTH, source.y + TABLE_HEADER_HEIGHT),
+                end = Offset(target.x, target.y + TABLE_HEADER_HEIGHT),
+            ) <= 8f
+    }
+
+private fun distanceToSegment(
+    point: Offset,
+    start: Offset,
+    end: Offset,
+): Float {
+    val dx = end.x - start.x
+    val dy = end.y - start.y
+    if (abs(dx) < 0.001f && abs(dy) < 0.001f) {
+        return distance(point, start)
+    }
+
+    val t =
+        (((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy))
+            .coerceIn(0f, 1f)
+    val projection = Offset(start.x + t * dx, start.y + t * dy)
+    return distance(point, projection)
+}
+
+private fun distance(
+    first: Offset,
+    second: Offset,
+): Float {
+    val dx = first.x - second.x
+    val dy = first.y - second.y
+    return sqrt(dx * dx + dy * dy)
+}

@@ -6,6 +6,8 @@ import kotlinx.coroutines.launch
 import su.kidoz.core.model.DatabaseType
 import su.kidoz.database.ConnectionManager
 import su.kidoz.mvi.MviViewModel
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 
 class DiagramViewModel(
     private val connectionManager: ConnectionManager,
@@ -72,8 +74,25 @@ class DiagramViewModel(
                 updateState { copy(showDdlPreview = !showDdlPreview) }
             }
 
+            DiagramEvent.InsertDdlIntoEditor -> {
+                insertDdlIntoEditor()
+            }
+
+            DiagramEvent.CopyDdlToClipboard -> {
+                copyDdlToClipboard()
+            }
+
             DiagramEvent.AddTable -> {
                 addTable()
+            }
+
+            is DiagramEvent.AddRelationship -> {
+                addRelationship(
+                    sourceTableId = event.sourceTableId,
+                    sourceColumn = event.sourceColumn,
+                    targetTableId = event.targetTableId,
+                    targetColumn = event.targetColumn,
+                )
             }
 
             is DiagramEvent.RenameSelectedTable -> {
@@ -106,6 +125,42 @@ class DiagramViewModel(
                 deleteSelected()
             }
         }
+    }
+
+    private fun insertDdlIntoEditor() {
+        val ddl = currentState.ddlPreview.trim()
+        if (!canExportDdl(ddl)) return
+
+        sendEffect(DiagramEffect.InsertIntoEditor(ddl))
+        sendEffect(DiagramEffect.ShowMessage("DDL inserted into editor"))
+    }
+
+    private fun copyDdlToClipboard() {
+        val ddl = currentState.ddlPreview.trim()
+        if (!canExportDdl(ddl)) return
+
+        try {
+            Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(ddl), null)
+            sendEffect(DiagramEffect.ShowMessage("DDL copied to clipboard"))
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to copy diagram DDL" }
+            sendEffect(DiagramEffect.ShowError("Failed to copy DDL"))
+        }
+    }
+
+    private fun canExportDdl(ddl: String): Boolean {
+        val issues = currentState.validationIssues
+        if (issues.isNotEmpty()) {
+            sendEffect(DiagramEffect.ShowError(issues.first()))
+            return false
+        }
+
+        if (ddl.isBlank()) {
+            sendEffect(DiagramEffect.ShowMessage("No draft DDL to export"))
+            return false
+        }
+
+        return true
     }
 
     private fun loadDiagram() {
@@ -284,6 +339,76 @@ class DiagramViewModel(
                     }
                 }
             copy(tables = nextTables, ddlPreview = DiagramDdlGenerator.generate(nextTables, relationships))
+        }
+    }
+
+    private fun addRelationship(
+        sourceTableId: String,
+        sourceColumn: String,
+        targetTableId: String,
+        targetColumn: String,
+    ) {
+        val sourceTable = currentState.tables.firstOrNull { it.id == sourceTableId }
+        val targetTable = currentState.tables.firstOrNull { it.id == targetTableId }
+        if (sourceTable == null || targetTable == null) {
+            sendEffect(DiagramEffect.ShowError("Select valid source and target tables"))
+            return
+        }
+
+        if (sourceColumn.isBlank() || targetColumn.isBlank()) {
+            sendEffect(DiagramEffect.ShowError("Select source and target columns"))
+            return
+        }
+
+        val duplicate =
+            currentState.relationships.any {
+                it.sourceTableId == sourceTableId &&
+                    it.targetTableId == targetTableId &&
+                    it.sourceColumns == listOf(sourceColumn) &&
+                    it.targetColumns == listOf(targetColumn)
+            }
+        if (duplicate) {
+            sendEffect(DiagramEffect.ShowError("Relationship already exists"))
+            return
+        }
+
+        val relationshipNumber = currentState.relationships.count { it.isDraft } + 1
+        val relationship =
+            DiagramRelationship(
+                id = "$sourceTableId->$targetTableId:$sourceColumn:$targetColumn:$relationshipNumber",
+                name = "fk_${sourceTable.name}_${targetTable.name}_$relationshipNumber",
+                sourceTableId = sourceTableId,
+                sourceColumns = listOf(sourceColumn),
+                targetTableId = targetTableId,
+                targetColumns = listOf(targetColumn),
+                isDraft = true,
+            )
+
+        updateState {
+            val nextTables =
+                tables.map { table ->
+                    if (table.id == sourceTableId) {
+                        table.copy(
+                            columns =
+                                table.columns.map { column ->
+                                    if (column.name == sourceColumn) {
+                                        column.copy(isForeignKey = true)
+                                    } else {
+                                        column
+                                    }
+                                },
+                        )
+                    } else {
+                        table
+                    }
+                }
+            val nextRelationships = relationships + relationship
+            copy(
+                tables = nextTables,
+                relationships = nextRelationships,
+                selectedElement = DiagramSelection.Relationship(relationship.id),
+                ddlPreview = DiagramDdlGenerator.generate(nextTables, nextRelationships),
+            )
         }
     }
 
