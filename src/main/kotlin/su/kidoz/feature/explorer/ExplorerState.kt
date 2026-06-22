@@ -15,6 +15,7 @@ data class ExplorerState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val tableDetails: TableDetails? = null,
+    val tableDetailsByKey: Map<TableDetailsKey, TableDetails> = emptyMap(),
     val indexDialogState: ElasticsearchIndexDialogState? = null,
     val deleteConfirmation: DeleteConfirmationState? = null,
     // Schema-organized data for JDBC databases
@@ -108,11 +109,23 @@ data class ExplorerState(
         return fields.size >= indexFieldLimit
     }
 
+    fun getTableDetails(
+        tableName: String,
+        schema: String?,
+    ): TableDetails? =
+        tableDetailsByKey[TableDetailsKey(tableName, schema)]
+            ?: tableDetails?.takeIf { it.table.name == tableName && it.table.schema == schema }
+
     companion object {
         /** Default limit for number of fields to load per index */
         const val DEFAULT_FIELD_LIMIT = 100
     }
 }
+
+data class TableDetailsKey(
+    val tableName: String,
+    val schema: String?,
+)
 
 data class TableDetails(
     val table: TableInfo,

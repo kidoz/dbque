@@ -165,7 +165,15 @@ class ExplorerViewModel(
         val dbType = activeConnection.config.type
 
         viewModelScope.launch {
-            updateState { copy(isLoading = true, error = null, databaseType = dbType) }
+            updateState {
+                copy(
+                    isLoading = true,
+                    error = null,
+                    databaseType = dbType,
+                    tableDetails = null,
+                    tableDetailsByKey = emptyMap(),
+                )
+            }
             try {
                 when (dbType) {
                     DatabaseType.MONGODB -> loadMongoMetadata(activeConnection)
@@ -354,7 +362,9 @@ class ExplorerViewModel(
             val parts = nodeId.removePrefix("table:").split(":", limit = 2)
             val schema = parts.getOrNull(0)?.takeIf { it.isNotEmpty() }
             val tableName = parts.getOrNull(1) ?: return
-            loadTableDetails(tableName, schema)
+            if (currentState.getTableDetails(tableName, schema) == null) {
+                loadTableDetails(tableName, schema)
+            }
         }
 
         // Load collection details when expanding a MongoDB collection node
@@ -362,7 +372,9 @@ class ExplorerViewModel(
             val parts = nodeId.removePrefix("collection:").split(":", limit = 2)
             val databaseName = parts.getOrNull(0) ?: return
             val collectionName = parts.getOrNull(1) ?: return
-            loadMongoCollectionDetails(collectionName, databaseName)
+            if (currentState.getTableDetails(collectionName, databaseName) == null) {
+                loadMongoCollectionDetails(collectionName, databaseName)
+            }
         }
 
         // Load field mappings when expanding an Elasticsearch index node
@@ -549,18 +561,16 @@ class ExplorerViewModel(
                 currentState.tables.find { it.name == tableName && it.schema == schema }
                     ?: return
 
-            updateState {
-                copy(
-                    tableDetails =
-                        TableDetails(
-                            table = tableInfo.copy(columns = columns),
-                            columns = columns,
-                            primaryKey = pk,
-                            foreignKeys = fks,
-                            indexes = indexes,
-                        ),
-                )
-            }
+            updateTableDetails(
+                TableDetails(
+                    table = tableInfo.copy(columns = columns),
+                    columns = columns,
+                    primaryKey = pk,
+                    foreignKeys = fks,
+                    indexes = indexes,
+                ),
+                TableDetailsKey(tableName, schema),
+            )
         }
     }
 
@@ -578,18 +588,16 @@ class ExplorerViewModel(
             currentState.tables.find { it.name == collectionName }
                 ?: return
 
-        updateState {
-            copy(
-                tableDetails =
-                    TableDetails(
-                        table = tableInfo.copy(columns = columns),
-                        columns = columns,
-                        primaryKey = null,
-                        foreignKeys = emptyList(),
-                        indexes = indexes,
-                    ),
-            )
-        }
+        updateTableDetails(
+            TableDetails(
+                table = tableInfo.copy(columns = columns),
+                columns = columns,
+                primaryKey = null,
+                foreignKeys = emptyList(),
+                indexes = indexes,
+            ),
+            TableDetailsKey(collectionName, null),
+        )
     }
 
     private fun loadMongoCollectionDetails(
@@ -609,18 +617,16 @@ class ExplorerViewModel(
                 val collections = currentState.collectionsByDatabase[databaseName] ?: emptyList()
                 val tableInfo = collections.find { it.name == collectionName } ?: return@launch
 
-                updateState {
-                    copy(
-                        tableDetails =
-                            TableDetails(
-                                table = tableInfo.copy(columns = columns),
-                                columns = columns,
-                                primaryKey = null,
-                                foreignKeys = emptyList(),
-                                indexes = indexes,
-                            ),
-                    )
-                }
+                updateTableDetails(
+                    TableDetails(
+                        table = tableInfo.copy(columns = columns, schema = databaseName),
+                        columns = columns,
+                        primaryKey = null,
+                        foreignKeys = emptyList(),
+                        indexes = indexes,
+                    ),
+                    TableDetailsKey(collectionName, databaseName),
+                )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to load collection details for $collectionName" }
                 sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load collection details"))
@@ -701,16 +707,26 @@ class ExplorerViewModel(
             currentState.tables.find { it.name == indexName }
                 ?: return
 
+        updateTableDetails(
+            TableDetails(
+                table = tableInfo.copy(columns = columns),
+                columns = columns,
+                primaryKey = null,
+                foreignKeys = emptyList(),
+                indexes = emptyList(),
+            ),
+            TableDetailsKey(indexName, null),
+        )
+    }
+
+    private fun updateTableDetails(
+        details: TableDetails,
+        key: TableDetailsKey = TableDetailsKey(details.table.name, details.table.schema),
+    ) {
         updateState {
             copy(
-                tableDetails =
-                    TableDetails(
-                        table = tableInfo.copy(columns = columns),
-                        columns = columns,
-                        primaryKey = null,
-                        foreignKeys = emptyList(),
-                        indexes = emptyList(),
-                    ),
+                tableDetails = details,
+                tableDetailsByKey = tableDetailsByKey + (key to details),
             )
         }
     }

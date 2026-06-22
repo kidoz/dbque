@@ -143,7 +143,7 @@ fun DatabaseTree(
 
                                 // Show Fields and Indexes folders when collection is expanded
                                 if (isCollectionExpanded) {
-                                    val details = state.tableDetails?.takeIf { it.table.name == collection.name }
+                                    val details = state.getTableDetails(collection.name, database.name)
 
                                     // Fields folder
                                     val fieldsFolderId = "fields:${database.name}:${collection.name}"
@@ -366,10 +366,7 @@ fun DatabaseTree(
                                         )
 
                                         if (isTableExpanded) {
-                                            val details =
-                                                state.tableDetails?.takeIf {
-                                                    it.table.name == table.name && it.table.schema == table.schema
-                                                }
+                                            val details = state.getTableDetails(table.name, table.schema)
                                             val columnsFolderId = "columns:${table.schema}:${table.name}"
                                             TreeNodeItem(
                                                 node = TreeNode.ColumnsFolder(table.name, table.schema),
@@ -506,28 +503,27 @@ fun DatabaseTree(
                             }
 
                             if (state.expandedNodes.contains("tables::${schema.name}")) {
-                                items(schemaTables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                                items(schemaTables, key = { TreeNode.TableNode(it).id }) { table ->
                                     val selectedTable = (state.selectedNode as? TreeNode.TableNode)?.table
+                                    val tableNode = TreeNode.TableNode(table)
+                                    val tableNodeId = tableNode.id
                                     TreeNodeItem(
-                                        node = TreeNode.TableNode(table),
-                                        isExpanded = state.expandedNodes.contains("table:${table.schema}:${table.name}"),
+                                        node = tableNode,
+                                        isExpanded = state.expandedNodes.contains(tableNodeId),
                                         isSelected =
                                             selectedTable != null &&
                                                 selectedTable.name == table.name &&
                                                 selectedTable.schema == table.schema,
                                         level = 2,
-                                        onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
-                                        onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                                        onToggle = { onEvent(ExplorerEvent.ToggleNode(tableNodeId)) },
+                                        onSelect = { onEvent(ExplorerEvent.SelectNode(tableNode)) },
                                         onEvent = onEvent,
                                         terminology = terminology,
                                     )
 
                                     // Show Columns and Indexes folders when table is expanded
-                                    if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
-                                        val details =
-                                            state.tableDetails?.takeIf {
-                                                it.table.name == table.name && it.table.schema == table.schema
-                                            }
+                                    if (state.expandedNodes.contains(tableNodeId)) {
+                                        val details = state.getTableDetails(table.name, table.schema)
 
                                         // Columns folder
                                         val columnsFolderId = "columns:${table.schema}:${table.name}"
@@ -649,21 +645,23 @@ fun DatabaseTree(
                     }
 
                     if (state.expandedNodes.contains("tables::")) {
-                        items(state.tables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                        items(state.tables, key = { TreeNode.TableNode(it).id }) { table ->
+                            val tableNode = TreeNode.TableNode(table)
+                            val tableNodeId = tableNode.id
                             TreeNodeItem(
-                                node = TreeNode.TableNode(table),
-                                isExpanded = state.expandedNodes.contains("table:${table.schema}:${table.name}"),
+                                node = tableNode,
+                                isExpanded = state.expandedNodes.contains(tableNodeId),
                                 isSelected = (state.selectedNode as? TreeNode.TableNode)?.table?.name == table.name,
                                 level = 1,
-                                onToggle = { onEvent(ExplorerEvent.ToggleNode("table:${table.schema}:${table.name}")) },
-                                onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                                onToggle = { onEvent(ExplorerEvent.ToggleNode(tableNodeId)) },
+                                onSelect = { onEvent(ExplorerEvent.SelectNode(tableNode)) },
                                 onEvent = onEvent,
                                 terminology = terminology,
                             )
 
                             // Show Columns and Indexes folders when table is expanded
-                            if (state.expandedNodes.contains("table:${table.schema}:${table.name}")) {
-                                val details = state.tableDetails?.takeIf { it.table.name == table.name }
+                            if (state.expandedNodes.contains(tableNodeId)) {
+                                val details = state.getTableDetails(table.name, table.schema)
 
                                 // Columns folder
                                 val columnsFolderId = "columns:${table.schema ?: ""}:${table.name}"
