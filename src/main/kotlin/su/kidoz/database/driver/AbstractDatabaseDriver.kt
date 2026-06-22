@@ -417,6 +417,8 @@ abstract class AbstractDatabaseDriver : DatabaseDriver {
 
                     DatabaseType.MYSQL -> DatabaseCapabilities.forMySql(version)
 
+                    DatabaseType.STARROCKS -> DatabaseCapabilities.forStarRocks(version)
+
                     DatabaseType.SQLITE -> DatabaseCapabilities.forSqlite(version)
 
                     DatabaseType.H2 -> DatabaseCapabilities.forH2(version, detectH2Mode(connection))

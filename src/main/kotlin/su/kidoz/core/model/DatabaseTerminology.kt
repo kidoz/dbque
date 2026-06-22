@@ -45,6 +45,7 @@ fun DatabaseType.terminology(): DatabaseTerminology =
     when (this) {
         DatabaseType.POSTGRESQL,
         DatabaseType.MYSQL,
+        DatabaseType.STARROCKS,
         DatabaseType.SQLITE,
         DatabaseType.H2,
         -> {

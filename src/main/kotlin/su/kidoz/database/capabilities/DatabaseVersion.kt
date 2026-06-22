@@ -76,6 +76,12 @@ data class DatabaseVersion(
         }
 
         /**
+         * Parse StarRocks version from SELECT current_version()
+         * e.g., "4.0.0", "3.3.5-12345", "4.1.0 RELEASE"
+         */
+        fun parseStarRocks(versionOutput: String): DatabaseVersion = parse(versionOutput.substringBefore("-"), "StarRocks")
+
+        /**
          * Parse SQLite version from SELECT sqlite_version()
          * e.g., "3.39.0"
          */

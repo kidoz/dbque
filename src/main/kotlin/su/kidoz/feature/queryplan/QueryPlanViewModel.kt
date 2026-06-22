@@ -60,7 +60,9 @@ class QueryPlanViewModel(
                                             parser.parsePostgresPlan(jsonPlan)
                                         }
 
-                                        DatabaseType.MYSQL -> {
+                                        DatabaseType.MYSQL,
+                                        DatabaseType.STARROCKS,
+                                        -> {
                                             parser.parseMySqlPlan(rows)
                                         }
 
@@ -102,7 +104,9 @@ class QueryPlanViewModel(
                 }
             }
 
-            DatabaseType.MYSQL -> {
+            DatabaseType.MYSQL,
+            DatabaseType.STARROCKS,
+            -> {
                 if (analyze) {
                     "EXPLAIN ANALYZE $query"
                 } else {

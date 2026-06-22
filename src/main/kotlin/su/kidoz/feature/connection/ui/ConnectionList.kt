@@ -195,6 +195,7 @@ private fun getDatabaseIcon(type: DatabaseType) =
     when (type) {
         DatabaseType.POSTGRESQL -> Icons.Default.Storage
         DatabaseType.MYSQL -> Icons.Default.Storage
+        DatabaseType.STARROCKS -> Icons.Default.Storage
         DatabaseType.SQLITE -> Icons.AutoMirrored.Filled.InsertDriveFile
         DatabaseType.H2 -> Icons.Default.Memory
         DatabaseType.MONGODB -> Icons.Default.Cloud

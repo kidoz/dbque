@@ -101,6 +101,7 @@ class LiveValidator(
 
                     DatabaseType.POSTGRESQL,
                     DatabaseType.MYSQL,
+                    DatabaseType.STARROCKS,
                     DatabaseType.SQLITE,
                     DatabaseType.H2,
                     -> su.kidoz.feature.parser.highlight.DatabaseType.SQL
@@ -110,7 +111,7 @@ class LiveValidator(
 
             val dialect =
                 when (input.databaseType) {
-                    DatabaseType.MYSQL -> SqlDialect.MYSQL
+                    DatabaseType.MYSQL, DatabaseType.STARROCKS -> SqlDialect.MYSQL
                     DatabaseType.SQLITE -> SqlDialect.SQLITE
                     else -> SqlDialect.POSTGRESQL
                 }

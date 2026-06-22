@@ -7,7 +7,7 @@ import su.kidoz.core.model.SchemaInfo
 import su.kidoz.database.capabilities.*
 import java.sql.Connection
 
-class MySqlDriver : AbstractDatabaseDriver() {
+open class MySqlDriver : AbstractDatabaseDriver() {
     override val type: DatabaseType = DatabaseType.MYSQL
 
     override suspend fun getSchemas(

@@ -250,6 +250,29 @@ class DatabaseTypeTest {
     }
 
     @Test
+    fun databaseType_starrocksReusesMySqlDriver() {
+        // StarRocks speaks the MySQL wire protocol and has no JDBC driver of its own.
+        assertEquals("com.mysql.cj.jdbc.Driver", DatabaseType.STARROCKS.driverClass)
+    }
+
+    @Test
+    fun databaseType_starrocksDefaultPort() {
+        assertEquals(9030, DatabaseType.STARROCKS.defaultPort)
+    }
+
+    @Test
+    fun databaseType_starrocksBuildsMySqlUrl() {
+        val url =
+            DatabaseType.STARROCKS.buildUrl(
+                host = "starrocks.example.com",
+                port = 9030,
+                database = "analytics",
+            )
+
+        assertEquals("jdbc:mysql://starrocks.example.com:9030/analytics", url)
+    }
+
+    @Test
     fun databaseType_sqliteHasCorrectDriver() {
         assertEquals("org.sqlite.JDBC", DatabaseType.SQLITE.driverClass)
     }

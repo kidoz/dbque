@@ -21,6 +21,14 @@ enum class DatabaseType(
         defaultPort = 3306,
         urlTemplate = "jdbc:mysql://{host}:{port}/{database}",
     ),
+    STARROCKS(
+        displayName = "StarRocks",
+        // StarRocks speaks the MySQL wire protocol and ships no JDBC driver of its own,
+        // so it reuses MySQL Connector/J on the FE query port (default 9030).
+        driverClass = "com.mysql.cj.jdbc.Driver",
+        defaultPort = 9030,
+        urlTemplate = "jdbc:mysql://{host}:{port}/{database}",
+    ),
     SQLITE(
         displayName = "SQLite",
         driverClass = "org.sqlite.JDBC",

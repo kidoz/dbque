@@ -126,6 +126,45 @@ data class DatabaseCapabilities(
             )
         }
 
+        fun forStarRocks(version: DatabaseVersion): DatabaseCapabilities =
+            DatabaseCapabilities(
+                type = DatabaseType.STARROCKS,
+                version = version,
+                // SQL Features
+                supportsExplainAnalyze = true, // EXPLAIN ANALYZE
+                supportsJsonExplain = false, // no EXPLAIN FORMAT=JSON; uses EXPLAIN COSTS/VERBOSE
+                supportsWindowFunctions = true,
+                supportsCTEs = true, // recursive CTEs added in 4.1
+                supportsMerge = false,
+                supportsUpsert = false, // updates go through Primary Key tables, not ON DUPLICATE KEY
+                supportsReturning = false,
+                supportsLateralJoin = false,
+                supportsFullOuterJoin = true,
+                // Schema Features
+                supportsPartitioning = true, // range/list/expression partitioning
+                supportsInvisibleIndexes = false,
+                supportsCheckConstraints = false, // not enforced
+                supportsGeneratedColumns = true, // generated columns
+                supportsTableSampling = false,
+                supportsStoredProcedures = false,
+                supportsRoles = true, // RBAC
+                // Monitoring
+                hasSystemSchema = true, // information_schema
+                hasStatisticsViews = true,
+                hasQueryStats = true, // query profile / audit
+                supportsProgressMonitoring = false,
+                // Syntax
+                identifierQuoteChar = '`',
+                maxIdentifierLength = 64,
+                defaultSchema = "",
+                stringConcatOperator = "", // uses CONCAT function
+                limitSyntax = LimitSyntax.LIMIT,
+                // Optimization
+                recommendedFetchSize = 1000,
+                supportsBatchRewrite = true,
+                supportsServerPreparedStatements = false,
+            )
+
         fun forSqlite(version: DatabaseVersion): DatabaseCapabilities =
             DatabaseCapabilities(
                 type = DatabaseType.SQLITE,

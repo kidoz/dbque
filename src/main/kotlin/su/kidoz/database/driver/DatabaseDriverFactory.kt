@@ -7,6 +7,7 @@ object DatabaseDriverFactory {
         mapOf(
             DatabaseType.POSTGRESQL to PostgresDriver(),
             DatabaseType.MYSQL to MySqlDriver(),
+            DatabaseType.STARROCKS to StarRocksDriver(),
             DatabaseType.SQLITE to SqliteDriver(),
             DatabaseType.H2 to H2Driver(),
             DatabaseType.MONGODB to MongoDbDriver(),
