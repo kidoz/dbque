@@ -62,6 +62,7 @@ data class DiagramColumn(
     val nullable: Boolean,
     val isPrimaryKey: Boolean = false,
     val isForeignKey: Boolean = false,
+    val autoIncrement: Boolean = false,
     val isDraft: Boolean = false,
 )
 

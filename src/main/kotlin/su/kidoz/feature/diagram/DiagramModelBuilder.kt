@@ -54,6 +54,7 @@ object DiagramModelBuilder {
                                 nullable = columnInfo.nullable,
                                 isPrimaryKey = columnInfo.name in primaryKeyColumns,
                                 isForeignKey = columnInfo.name in foreignKeyColumns,
+                                autoIncrement = columnInfo.autoIncrement,
                             )
                         },
                 )

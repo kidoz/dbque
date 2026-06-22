@@ -175,6 +175,16 @@ class DiagramViewModel(
         return true
     }
 
+    private fun generateDdlPreview(
+        tables: List<DiagramTable>,
+        relationships: List<DiagramRelationship>,
+    ): String =
+        DiagramDdlGenerator.generate(
+            tables = tables,
+            relationships = relationships,
+            dialect = DiagramDdlDialect.forDatabaseType(currentState.databaseType ?: connectionManager.activeConnection?.config?.type),
+        )
+
     private fun requestApplyDdl() {
         val ddl = currentState.ddlPreview.trim()
         if (!canExportDdl(ddl)) return
@@ -296,7 +306,7 @@ class DiagramViewModel(
                             selectedElement = DiagramSelection.None,
                             isLoading = false,
                             error = null,
-                            ddlPreview = DiagramDdlGenerator.generate(model.tables, model.relationships),
+                            ddlPreview = generateDdlPreview(model.tables, model.relationships),
                         )
                     }
                 }
@@ -350,6 +360,7 @@ class DiagramViewModel(
                             type = "INTEGER",
                             nullable = false,
                             isPrimaryKey = true,
+                            autoIncrement = true,
                             isDraft = true,
                         ),
                     ),
@@ -360,7 +371,7 @@ class DiagramViewModel(
             copy(
                 tables = nextTables,
                 selectedElement = DiagramSelection.Table(table.id),
-                ddlPreview = DiagramDdlGenerator.generate(nextTables, relationships),
+                ddlPreview = generateDdlPreview(nextTables, relationships),
             )
         }
     }
@@ -376,7 +387,7 @@ class DiagramViewModel(
                         it
                     }
                 }
-            copy(tables = nextTables, ddlPreview = DiagramDdlGenerator.generate(nextTables, relationships))
+            copy(tables = nextTables, ddlPreview = generateDdlPreview(nextTables, relationships))
         }
     }
 
@@ -402,7 +413,7 @@ class DiagramViewModel(
                         table
                     }
                 }
-            copy(tables = nextTables, ddlPreview = DiagramDdlGenerator.generate(nextTables, relationships))
+            copy(tables = nextTables, ddlPreview = generateDdlPreview(nextTables, relationships))
         }
     }
 
@@ -471,7 +482,7 @@ class DiagramViewModel(
                 tables = nextTables,
                 relationships = nextRelationships,
                 selectedElement = DiagramSelection.Relationship(relationship.id),
-                ddlPreview = DiagramDdlGenerator.generate(nextTables, nextRelationships),
+                ddlPreview = generateDdlPreview(nextTables, nextRelationships),
             )
         }
     }
@@ -494,7 +505,7 @@ class DiagramViewModel(
                             },
                     )
                 }
-            copy(tables = nextTables, ddlPreview = DiagramDdlGenerator.generate(nextTables, relationships))
+            copy(tables = nextTables, ddlPreview = generateDdlPreview(nextTables, relationships))
         }
     }
 
@@ -510,7 +521,7 @@ class DiagramViewModel(
                     copy(
                         relationships = nextRelationships,
                         selectedElement = DiagramSelection.None,
-                        ddlPreview = DiagramDdlGenerator.generate(tables, nextRelationships),
+                        ddlPreview = generateDdlPreview(tables, nextRelationships),
                     )
                 }
             }
@@ -526,7 +537,7 @@ class DiagramViewModel(
                         tables = nextTables,
                         relationships = nextRelationships,
                         selectedElement = DiagramSelection.None,
-                        ddlPreview = DiagramDdlGenerator.generate(nextTables, nextRelationships),
+                        ddlPreview = generateDdlPreview(nextTables, nextRelationships),
                     )
                 }
             }

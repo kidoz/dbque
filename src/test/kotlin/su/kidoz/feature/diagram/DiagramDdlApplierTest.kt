@@ -52,6 +52,16 @@ class DiagramDdlApplierTest {
             }
         }
 
+    @Test
+    fun apply_ignoresCommentOnlyDdl() =
+        runTest {
+            DriverManager.getConnection("jdbc:h2:mem:diagram_ddl_apply_comments;DB_CLOSE_DELAY=-1").use { connection ->
+                val count = DiagramDdlApplier.apply(connection, "-- Rebuild this table to add the foreign key.")
+
+                assertEquals(0, count)
+            }
+        }
+
     private fun assertTableExists(
         connection: java.sql.Connection,
         tableName: String,

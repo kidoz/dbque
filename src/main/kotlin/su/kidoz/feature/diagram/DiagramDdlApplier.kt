@@ -14,7 +14,11 @@ object DiagramDdlApplier {
         ddl: String,
     ): Int =
         withContext(Dispatchers.IO) {
-            val statements = QuerySplitter.getAllQueries(ddl).map { it.query.trim() }.filter { it.isNotBlank() }
+            val statements =
+                QuerySplitter
+                    .getAllQueries(ddl)
+                    .map { it.query.trim() }
+                    .filter { it.hasExecutableSql() }
             if (statements.isEmpty()) {
                 return@withContext 0
             }
@@ -43,5 +47,11 @@ object DiagramDdlApplier {
                     logger.warn(restoreError) { "Failed to restore auto-commit after applying diagram DDL" }
                 }
             }
+        }
+
+    private fun String.hasExecutableSql(): Boolean =
+        lines().any { line ->
+            val trimmed = line.trim()
+            trimmed.isNotBlank() && !trimmed.startsWith("--")
         }
 }

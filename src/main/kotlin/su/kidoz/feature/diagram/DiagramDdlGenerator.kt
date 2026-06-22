@@ -1,27 +1,35 @@
 package su.kidoz.feature.diagram
 
-import su.kidoz.core.model.ForeignKeyRule
-
 object DiagramDdlGenerator {
     fun generate(
         tables: List<DiagramTable>,
         relationships: List<DiagramRelationship>,
+        dialect: DiagramDdlDialect = DiagramDdlDialect.PostgreSql,
     ): String {
         val statements = mutableListOf<String>()
         tables.filter { it.isDraft }.forEach { table ->
-            statements += createTableStatement(table)
+            statements += createTableStatement(table, tables, relationships, dialect)
         }
         relationships.filter { it.isDraft }.forEach { relationship ->
             val source = tables.firstOrNull { it.id == relationship.sourceTableId }
             val target = tables.firstOrNull { it.id == relationship.targetTableId }
             if (source != null && target != null) {
-                statements += alterTableStatement(source, target, relationship)
+                if (dialect.supportsAlterTableAddForeignKey) {
+                    statements += dialect.alterTableAddForeignKey(source, target, relationship)
+                } else if (!source.isDraft) {
+                    statements += dialect.unsupportedAlterTableForeignKeyComment(source, target, relationship)
+                }
             }
         }
         return statements.joinToString(separator = "\n\n")
     }
 
-    private fun createTableStatement(table: DiagramTable): String {
+    private fun createTableStatement(
+        table: DiagramTable,
+        tables: List<DiagramTable>,
+        relationships: List<DiagramRelationship>,
+        dialect: DiagramDdlDialect,
+    ): String {
         val columns =
             table.columns.ifEmpty {
                 listOf(
@@ -31,55 +39,53 @@ object DiagramDdlGenerator {
                         type = "INTEGER",
                         nullable = false,
                         isPrimaryKey = true,
+                        autoIncrement = true,
                         isDraft = true,
                     ),
                 )
             }
         val primaryKeys = columns.filter { it.isPrimaryKey }.map { it.name }
+        val inlinePrimaryKey = dialect == DiagramDdlDialect.Sqlite && primaryKeys.size == 1
+        val primaryKeyConstraint =
+            if (inlinePrimaryKey) {
+                null
+            } else {
+                dialect.primaryKeyConstraint(primaryKeys)
+            }
+        val inlineForeignKeys =
+            if (dialect.supportsAlterTableAddForeignKey) {
+                emptyList()
+            } else {
+                relationships
+                    .filter { it.isDraft && it.sourceTableId == table.id }
+                    .mapNotNull { relationship ->
+                        val target = tables.firstOrNull { it.id == relationship.targetTableId }
+                        target?.let {
+                            val constraintName =
+                                relationship.name
+                                    ?.takeIf { name -> name.isNotBlank() }
+                                    ?: "fk_${table.name}_${target.name}"
+                            "    ${dialect.foreignKeyConstraint(
+                                name = constraintName,
+                                sourceColumns = relationship.sourceColumns,
+                                target = target,
+                                targetColumns = relationship.targetColumns,
+                                deleteRule = relationship.deleteRule,
+                            )}"
+                        }
+                    }
+            }
         val lines =
             columns.map { column ->
-                buildString {
-                    append("    ")
-                    append(quote(column.name))
-                    append(" ")
-                    append(column.type.ifBlank { "TEXT" })
-                    if (!column.nullable || column.isPrimaryKey) {
-                        append(" NOT NULL")
-                    }
-                }
+                dialect.columnDefinition(column, primaryKeys)
             } +
-                if (primaryKeys.isNotEmpty()) {
-                    listOf("    PRIMARY KEY (${primaryKeys.joinToString { quote(it) }})")
-                } else {
-                    emptyList()
-                }
+                listOfNotNull(primaryKeyConstraint) +
+                inlineForeignKeys
 
         return buildString {
-            appendLine("CREATE TABLE ${qualifiedName(table)} (")
+            appendLine("CREATE TABLE ${dialect.qualifiedName(table)} (")
             appendLine(lines.joinToString(",\n"))
             append(");")
         }
     }
-
-    private fun alterTableStatement(
-        source: DiagramTable,
-        target: DiagramTable,
-        relationship: DiagramRelationship,
-    ): String =
-        buildString {
-            val name = relationship.name?.takeIf { it.isNotBlank() } ?: "fk_${source.name}_${target.name}"
-            append("ALTER TABLE ${qualifiedName(source)} ADD CONSTRAINT ${quote(name)} ")
-            append("FOREIGN KEY (${relationship.sourceColumns.joinToString { quote(it) }}) ")
-            append("REFERENCES ${qualifiedName(target)} (${relationship.targetColumns.joinToString { quote(it) }})")
-            if (relationship.deleteRule != ForeignKeyRule.NO_ACTION) {
-                append(" ON DELETE ${relationship.deleteRule.toSql()}")
-            }
-            append(";")
-        }
-
-    private fun qualifiedName(table: DiagramTable): String = table.schema?.let { "${quote(it)}.${quote(table.name)}" } ?: quote(table.name)
-
-    private fun quote(identifier: String): String = "\"${identifier.replace("\"", "\"\"")}\""
-
-    private fun ForeignKeyRule.toSql(): String = name.replace('_', ' ')
 }
