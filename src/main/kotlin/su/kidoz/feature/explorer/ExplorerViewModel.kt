@@ -7,6 +7,7 @@ import su.kidoz.core.model.DatabaseType
 import su.kidoz.database.ConnectionManager
 import su.kidoz.database.driver.ElasticsearchDriver
 import su.kidoz.database.driver.MongoDbDriver
+import su.kidoz.database.driver.StarRocksDriver
 import su.kidoz.mvi.MviViewModel
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -79,6 +80,15 @@ class ExplorerViewModel(
 
             is ExplorerEvent.CollapseSchema -> {
                 collapseSchema(event.schemaName)
+            }
+
+            // StarRocks catalog navigation
+            is ExplorerEvent.ExpandCatalog -> {
+                expandCatalog(event.catalogName)
+            }
+
+            is ExplorerEvent.CollapseCatalog -> {
+                collapseCatalog(event.catalogName)
             }
 
             // MongoDB database navigation
@@ -160,6 +170,7 @@ class ExplorerViewModel(
                 when (dbType) {
                     DatabaseType.MONGODB -> loadMongoMetadata(activeConnection)
                     DatabaseType.ELASTICSEARCH -> loadElasticsearchMetadata(activeConnection)
+                    DatabaseType.STARROCKS -> loadStarRocksMetadata(activeConnection)
                     else -> loadJdbcMetadata(activeConnection)
                 }
             } catch (e: Exception) {
@@ -216,6 +227,68 @@ class ExplorerViewModel(
                         expandedNodes = emptySet(),
                     )
                 }
+            }
+        }
+    }
+
+    private suspend fun loadStarRocksMetadata(activeConnection: su.kidoz.database.ActiveConnection) {
+        val driver = activeConnection.driver
+
+        activeConnection.getConnection().use { connection ->
+            val catalogs = driver.getCatalogs(connection)
+            val internal = catalogs.firstOrNull { it.isInternal }
+
+            updateState {
+                copy(
+                    catalogs = catalogs,
+                    isLoading = false,
+                    // Auto-expand the internal catalog so the user's databases are one click away.
+                    expandedNodes = internal?.let { setOf("catalog:${it.name}") } ?: emptySet(),
+                )
+            }
+
+            // Eagerly load the internal catalog's databases; external catalogs load on expand.
+            internal?.let { loadCatalogDatabases(it.name) }
+        }
+    }
+
+    private fun expandCatalog(catalogName: String) {
+        updateState { copy(expandedNodes = expandedNodes + "catalog:$catalogName") }
+        if (!currentState.isCatalogLoaded(catalogName)) {
+            loadCatalogDatabases(catalogName)
+        }
+    }
+
+    private fun collapseCatalog(catalogName: String) {
+        updateState { copy(expandedNodes = expandedNodes - "catalog:$catalogName") }
+    }
+
+    private fun loadCatalogDatabases(catalogName: String) {
+        val activeConnection = connectionManager.activeConnection ?: return
+        val driver = activeConnection.driver as? StarRocksDriver ?: return
+        val catalog = currentState.catalogs.firstOrNull { it.name == catalogName } ?: return
+
+        if (currentState.isCatalogLoaded(catalogName) || currentState.isCatalogLoading(catalogName)) {
+            return
+        }
+
+        viewModelScope.launch {
+            updateState { copy(loadingCatalogs = loadingCatalogs + catalogName) }
+            try {
+                activeConnection.getConnection().use { connection ->
+                    val databases = driver.getDatabasesInCatalog(connection, catalog)
+                    updateState {
+                        copy(
+                            databasesByCatalog = databasesByCatalog + (catalogName to databases),
+                            loadedCatalogs = loadedCatalogs + catalogName,
+                            loadingCatalogs = loadingCatalogs - catalogName,
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load databases for catalog $catalogName" }
+                updateState { copy(loadingCatalogs = loadingCatalogs - catalogName) }
+                sendEffect(ExplorerEffect.ShowError(e.message ?: "Failed to load catalog"))
             }
         }
     }
@@ -400,11 +473,15 @@ class ExplorerViewModel(
                 activeConnection.getConnection().use { connection ->
                     val tables = driver.getTables(connection, schemaName)
                     val views = driver.getViews(connection, schemaName)
+                    // StarRocks materialized views are first-class objects shown in their own folder.
+                    val materializedViews =
+                        (driver as? StarRocksDriver)?.getMaterializedViews(connection, schemaName) ?: emptyList()
 
                     updateState {
                         copy(
                             tablesBySchema = tablesBySchema + (schemaName to tables),
                             viewsBySchema = viewsBySchema + (schemaName to views),
+                            materializedViewsBySchema = materializedViewsBySchema + (schemaName to materializedViews),
                             loadedSchemas = loadedSchemas + schemaName,
                             loadingSchemas = loadingSchemas - schemaName,
                             // Also update flat lists for backward compatibility

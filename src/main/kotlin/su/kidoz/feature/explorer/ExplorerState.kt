@@ -23,6 +23,13 @@ data class ExplorerState(
     val loadedSchemas: Set<String> = emptySet(),
     val loadingSchemas: Set<String> = emptySet(),
     val defaultSchema: String? = null,
+    // StarRocks catalog hierarchy (catalog -> databases -> tables)
+    val catalogs: List<CatalogInfo> = emptyList(),
+    val databasesByCatalog: Map<String, List<SchemaInfo>> = emptyMap(),
+    val loadedCatalogs: Set<String> = emptySet(),
+    val loadingCatalogs: Set<String> = emptySet(),
+    // StarRocks materialized views, keyed by (catalog-qualified) schema name
+    val materializedViewsBySchema: Map<String, List<ViewInfo>> = emptyMap(),
     // MongoDB database-organized data
     val collectionsByDatabase: Map<String, List<TableInfo>> = emptyMap(),
     val loadedDatabases: Set<String> = emptySet(),
@@ -40,6 +47,10 @@ data class ExplorerState(
     /** Check if database uses schemas (PostgreSQL, MySQL, etc.) */
     val usesSchemas: Boolean
         get() = databaseType in listOf(DatabaseType.POSTGRESQL, DatabaseType.MYSQL, DatabaseType.H2)
+
+    /** Check if database uses a catalog hierarchy (StarRocks: catalog -> database -> table) */
+    val usesCatalogs: Boolean
+        get() = databaseType == DatabaseType.STARROCKS
 
     /** Check if database uses database hierarchy (MongoDB) */
     val usesDatabaseHierarchy: Boolean
@@ -60,6 +71,18 @@ data class ExplorerState(
 
     /** Check if a schema is currently loading */
     fun isSchemaLoading(schemaName: String): Boolean = loadingSchemas.contains(schemaName)
+
+    /** Get the databases belonging to a StarRocks catalog */
+    fun getDatabasesForCatalog(catalogName: String): List<SchemaInfo> = databasesByCatalog[catalogName] ?: emptyList()
+
+    /** Check if a catalog's databases have been loaded */
+    fun isCatalogLoaded(catalogName: String): Boolean = loadedCatalogs.contains(catalogName)
+
+    /** Check if a catalog is currently loading */
+    fun isCatalogLoading(catalogName: String): Boolean = loadingCatalogs.contains(catalogName)
+
+    /** Get the materialized views for a specific schema */
+    fun getMaterializedViewsForSchema(schemaName: String): List<ViewInfo> = materializedViewsBySchema[schemaName] ?: emptyList()
 
     /** Get collections for a specific MongoDB database */
     fun getCollectionsForDatabase(databaseName: String): List<TableInfo> = collectionsByDatabase[databaseName] ?: emptyList()

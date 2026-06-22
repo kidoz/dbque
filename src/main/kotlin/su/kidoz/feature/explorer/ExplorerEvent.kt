@@ -55,6 +55,15 @@ sealed interface ExplorerEvent : UiEvent {
         val schemaName: String,
     ) : ExplorerEvent
 
+    // StarRocks catalog navigation
+    data class ExpandCatalog(
+        val catalogName: String,
+    ) : ExplorerEvent
+
+    data class CollapseCatalog(
+        val catalogName: String,
+    ) : ExplorerEvent
+
     // MongoDB database navigation
     data class ExpandDatabase(
         val databaseName: String,

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import su.kidoz.core.model.CatalogInfo
 import su.kidoz.core.model.DatabaseCategory
 import su.kidoz.core.model.DatabaseInfo
 import su.kidoz.core.model.DatabaseTerminology
@@ -295,6 +296,167 @@ fun DatabaseTree(
                                                 level = 3,
                                                 limit = state.indexFieldLimit,
                                             )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (state.usesCatalogs && state.catalogs.isNotEmpty()) {
+                    // StarRocks catalog hierarchy: Catalog -> Database -> Tables -> Columns
+                    state.catalogs.forEach { catalog ->
+                        val catalogNodeId = "catalog:${catalog.name}"
+                        val isCatalogExpanded = state.expandedNodes.contains(catalogNodeId)
+
+                        item(key = catalogNodeId) {
+                            CatalogNodeItem(
+                                catalog = catalog,
+                                isExpanded = isCatalogExpanded,
+                                isLoading = state.isCatalogLoading(catalog.name),
+                                onToggle = {
+                                    if (isCatalogExpanded) {
+                                        onEvent(ExplorerEvent.CollapseCatalog(catalog.name))
+                                    } else {
+                                        onEvent(ExplorerEvent.ExpandCatalog(catalog.name))
+                                    }
+                                },
+                            )
+                        }
+
+                        if (isCatalogExpanded) {
+                            state.getDatabasesForCatalog(catalog.name).forEach { schema ->
+                                val schemaNodeId = "schema::${schema.name}"
+                                val isSchemaExpanded = state.expandedNodes.contains(schemaNodeId)
+
+                                item(key = "cat-schema:${schema.name}") {
+                                    SchemaNodeItem(
+                                        // Display the short database name; the full "catalog.db"
+                                        // id is still used for expand/load events.
+                                        schema = schema.copy(name = schema.name.substringAfter('.', schema.name)),
+                                        isExpanded = isSchemaExpanded,
+                                        isLoading = state.isSchemaLoading(schema.name),
+                                        isDefault = false,
+                                        indentLevel = 1,
+                                        onToggle = {
+                                            if (isSchemaExpanded) {
+                                                onEvent(ExplorerEvent.CollapseSchema(schema.name))
+                                            } else {
+                                                onEvent(ExplorerEvent.ExpandSchema(schema.name))
+                                            }
+                                        },
+                                    )
+                                }
+
+                                if (isSchemaExpanded) {
+                                    val schemaTables = state.getTablesForSchema(schema.name)
+                                    items(schemaTables, key = { "table:${it.schema}:${it.name}" }) { table ->
+                                        val tableNodeId = "table:${table.schema}:${table.name}"
+                                        val isTableExpanded = state.expandedNodes.contains(tableNodeId)
+                                        val selectedTable = (state.selectedNode as? TreeNode.TableNode)?.table
+
+                                        TreeNodeItem(
+                                            node = TreeNode.TableNode(table),
+                                            isExpanded = isTableExpanded,
+                                            isSelected = selectedTable?.name == table.name && selectedTable.schema == table.schema,
+                                            level = 2,
+                                            onToggle = { onEvent(ExplorerEvent.ToggleNode(tableNodeId)) },
+                                            onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.TableNode(table))) },
+                                            onEvent = onEvent,
+                                            terminology = terminology,
+                                        )
+
+                                        if (isTableExpanded) {
+                                            val details =
+                                                state.tableDetails?.takeIf {
+                                                    it.table.name == table.name && it.table.schema == table.schema
+                                                }
+                                            val columnsFolderId = "columns:${table.schema}:${table.name}"
+                                            TreeNodeItem(
+                                                node = TreeNode.ColumnsFolder(table.name, table.schema),
+                                                isExpanded = state.expandedNodes.contains(columnsFolderId),
+                                                isSelected = false,
+                                                level = 3,
+                                                onToggle = { onEvent(ExplorerEvent.ToggleNode(columnsFolderId)) },
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                                itemCount = details?.columns?.size,
+                                            )
+
+                                            if (state.expandedNodes.contains(columnsFolderId)) {
+                                                details?.columns?.forEach { column ->
+                                                    TreeNodeItem(
+                                                        node = TreeNode.ColumnNode(column, table.name),
+                                                        isExpanded = false,
+                                                        isSelected = false,
+                                                        level = 4,
+                                                        onToggle = {},
+                                                        onSelect = {},
+                                                        onEvent = onEvent,
+                                                        terminology = terminology,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Views folder
+                                    val schemaViews = state.getViewsForSchema(schema.name)
+                                    if (schemaViews.isNotEmpty()) {
+                                        val viewsFolderId = "views::${schema.name}"
+                                        item(key = "cat-views:${schema.name}") {
+                                            TreeNodeItem(
+                                                node = TreeNode.ViewsFolder(schema.name, null),
+                                                isExpanded = state.expandedNodes.contains(viewsFolderId),
+                                                isSelected = false,
+                                                level = 2,
+                                                onToggle = { onEvent(ExplorerEvent.ToggleNode(viewsFolderId)) },
+                                                onSelect = {},
+                                                onEvent = onEvent,
+                                                terminology = terminology,
+                                                itemCount = schemaViews.size,
+                                            )
+                                        }
+                                        if (state.expandedNodes.contains(viewsFolderId)) {
+                                            items(schemaViews, key = { "view:${it.schema}:${it.name}" }) { view ->
+                                                TreeNodeItem(
+                                                    node = TreeNode.ViewNode(view),
+                                                    isExpanded = false,
+                                                    isSelected = (state.selectedNode as? TreeNode.ViewNode)?.view == view,
+                                                    level = 3,
+                                                    onToggle = {},
+                                                    onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(view))) },
+                                                    onEvent = onEvent,
+                                                    terminology = terminology,
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Materialized Views folder (StarRocks)
+                                    val schemaMvs = state.getMaterializedViewsForSchema(schema.name)
+                                    if (schemaMvs.isNotEmpty()) {
+                                        val mvFolderId = "mvs::${schema.name}"
+                                        item(key = "cat-mvs:${schema.name}") {
+                                            MaterializedViewsFolderItem(
+                                                isExpanded = state.expandedNodes.contains(mvFolderId),
+                                                count = schemaMvs.size,
+                                                onToggle = { onEvent(ExplorerEvent.ToggleNode(mvFolderId)) },
+                                            )
+                                        }
+                                        if (state.expandedNodes.contains(mvFolderId)) {
+                                            items(schemaMvs, key = { "mv:${it.schema}:${it.name}" }) { mv ->
+                                                TreeNodeItem(
+                                                    node = TreeNode.ViewNode(mv),
+                                                    isExpanded = false,
+                                                    isSelected = (state.selectedNode as? TreeNode.ViewNode)?.view == mv,
+                                                    level = 3,
+                                                    onToggle = {},
+                                                    onSelect = { onEvent(ExplorerEvent.SelectNode(TreeNode.ViewNode(mv))) },
+                                                    onEvent = onEvent,
+                                                    terminology = terminology,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -606,6 +768,105 @@ fun DatabaseTree(
 }
 
 @Composable
+private fun CatalogNodeItem(
+    catalog: CatalogInfo,
+    isExpanded: Boolean,
+    isLoading: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 1.5.dp,
+            )
+        } else {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Icon(
+            imageVector = Icons.Default.Dataset,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        Text(
+            text = catalog.name,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (catalog.isInternal) androidx.compose.ui.text.font.FontWeight.Bold else null,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+
+        // Tag external catalogs with their connector type (hive, iceberg, jdbc, ...)
+        if (!catalog.isInternal) {
+            Text(
+                text = catalog.type?.lowercase() ?: "external",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MaterializedViewsFolderItem(
+    isExpanded: Boolean,
+    count: Int,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(start = (12 + 2 * 16).dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Icon(
+            imageVector = Icons.Default.Dataset,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = DBQueTheme.extendedColors.treeView,
+        )
+        Text(
+            text = "Materialized Views",
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "($count)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun DatabaseNodeItem(
     database: DatabaseInfo,
     isExpanded: Boolean,
@@ -662,13 +923,14 @@ private fun SchemaNodeItem(
     isLoading: Boolean,
     isDefault: Boolean,
     onToggle: () -> Unit,
+    indentLevel: Int = 0,
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable { onToggle() }
-                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 12.dp + (indentLevel * 16).dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -1077,6 +1339,7 @@ private fun getNodeDisplayText(
 private fun getNodeSuffix(node: TreeNode): String? =
     when (node) {
         is TreeNode.IndexNode -> if (node.index.unique) "UNIQUE" else null
+        is TreeNode.TableNode -> node.table.tableModel
         else -> null
     }
 

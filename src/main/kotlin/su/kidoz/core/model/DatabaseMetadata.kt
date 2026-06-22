@@ -5,6 +5,17 @@ data class DatabaseInfo(
     val schemas: List<SchemaInfo> = emptyList(),
 )
 
+/**
+ * A StarRocks-style catalog: the internal `default_catalog` plus any external catalogs
+ * (Hive, Iceberg, JDBC, ...). Sits above databases in the object hierarchy.
+ */
+data class CatalogInfo(
+    val name: String,
+    val type: String? = null,
+    val isInternal: Boolean = false,
+    val comment: String? = null,
+)
+
 data class SchemaInfo(
     val name: String,
     val catalog: String? = null,
@@ -23,6 +34,8 @@ data class TableInfo(
     val indexes: List<IndexInfo> = emptyList(),
     val estimatedRowCount: Long? = null,
     val comment: String? = null,
+    /** StarRocks table model (duplicate / aggregate / unique / primary), when known. */
+    val tableModel: String? = null,
 )
 
 enum class TableType {

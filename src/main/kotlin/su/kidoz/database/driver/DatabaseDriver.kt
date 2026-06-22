@@ -13,6 +13,12 @@ interface DatabaseDriver {
 
     suspend fun getDatabases(connection: Connection): List<DatabaseInfo>
 
+    /**
+     * Get catalogs (e.g. StarRocks internal + external catalogs). Most databases have a single
+     * implicit catalog, so the default is empty and callers fall back to schemas/databases.
+     */
+    suspend fun getCatalogs(connection: Connection): List<CatalogInfo> = emptyList()
+
     suspend fun getSchemas(
         connection: Connection,
         database: String? = null,
