@@ -2,7 +2,7 @@ package su.kidoz.database.driver
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import su.kidoz.core.model.DatabaseType
+import su.kidoz.core.model.*
 import su.kidoz.database.capabilities.*
 import java.sql.Connection
 
@@ -16,7 +16,10 @@ import java.sql.Connection
  *  - version detection uses `current_version()` (the MySQL-compat `VERSION()` reports a
  *    fake MySQL version, not the StarRocks one),
  *  - EXPLAIN has no `FORMAT=JSON/TREE`; StarRocks supports `EXPLAIN [ANALYZE|COSTS|VERBOSE]`,
- *  - StarRocks has no InnoDB internals, so secondary-index statistics are unavailable.
+ *  - StarRocks has no InnoDB internals, so secondary-index statistics are unavailable,
+ *  - StarRocks does not enforce foreign keys and exposes no conventional secondary indexes,
+ *    and the MySQL connector's `getImportedKeys`/`getIndexInfo` issue `information_schema`
+ *    queries StarRocks cannot resolve, so both are reported as empty rather than failing.
  */
 class StarRocksDriver : MySqlDriver() {
     override val type: DatabaseType = DatabaseType.STARROCKS
@@ -68,6 +71,41 @@ class StarRocksDriver : MySqlDriver() {
     ): ExplainResult =
         // StarRocks only ever returns a textual plan, so coerce JSON/TREE requests to TEXT.
         super.explainQuery(connection, query, analyze, ExplainFormat.TEXT)
+
+    // ==================== StarRocks Constraint & Index Introspection ====================
+
+    // StarRocks is an OLAP engine that does not enforce foreign keys, and the MySQL
+    // connector's getImportedKeys() runs an information_schema query referencing
+    // KEY_COLUMN_USAGE.CONSTRAINT_NAME, which StarRocks cannot resolve. Try the inherited
+    // path (forward-compatible if a future version supports it) and fall back to none.
+    override suspend fun getForeignKeys(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): List<ForeignKeyInfo> =
+        try {
+            super.getForeignKeys(connection, table, schema, catalog)
+        } catch (e: Exception) {
+            logger.debug(e) { "Foreign-key metadata unavailable on StarRocks for $table" }
+            emptyList()
+        }
+
+    // StarRocks has no conventional secondary indexes (it uses sort/prefix keys and
+    // bitmap/bloom-filter indexes), and getIndexInfo() hits the same unsupported
+    // information_schema path; degrade to an empty list instead of failing.
+    override suspend fun getIndexes(
+        connection: Connection,
+        table: String,
+        schema: String?,
+        catalog: String?,
+    ): List<IndexInfo> =
+        try {
+            super.getIndexes(connection, table, schema, catalog)
+        } catch (e: Exception) {
+            logger.debug(e) { "Index metadata unavailable on StarRocks for $table" }
+            emptyList()
+        }
 
     // ==================== StarRocks Index Statistics ====================
 
