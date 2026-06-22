@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -539,6 +540,7 @@ private fun EditorToolbar(
             TextButton(
                 onClick = onExecuteCurrent,
                 enabled = queryCount > 0,
+                modifier = Modifier.focusProperties { canFocus = false },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 colors =
                     ButtonDefaults.textButtonColors(
@@ -561,6 +563,7 @@ private fun EditorToolbar(
             if (queryCount > 1) {
                 TextButton(
                     onClick = onExecuteAll,
+                    modifier = Modifier.focusProperties { canFocus = false },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     colors =
                         ButtonDefaults.textButtonColors(
@@ -584,6 +587,7 @@ private fun EditorToolbar(
             if (hasSelection) {
                 TextButton(
                     onClick = { onExecuteSelected(selectedText) },
+                    modifier = Modifier.focusProperties { canFocus = false },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     colors =
                         ButtonDefaults.textButtonColors(
